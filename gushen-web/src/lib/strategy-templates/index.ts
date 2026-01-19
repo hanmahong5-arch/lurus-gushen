@@ -35,36 +35,96 @@ export type StrategyCategory =
 export type MarketType = "stock" | "futures" | "crypto";
 
 /**
+ * Timeframe type for strategy applicability
+ * 策略适用的时间周期类型
+ */
+export type TimeframeType = "intraday" | "swing" | "position" | "longterm";
+
+/**
  * Strategy template interface
- * 策略模板接口
+ * 策略模板接口 (Phase 7 增强版)
  */
 export interface StrategyTemplate {
   id: string;
   name: string;
   nameEn: string;
   category: StrategyCategory;
-  type: "classic" | "popular";
+  subcategory?: string; // Phase 7: Subcategory for finer classification
+  type: "classic" | "popular" | "academic" | "practitioner"; // Phase 7: Added academic & practitioner
   icon: string;
   summary: string;
   summaryEn: string;
+  description?: string; // Phase 7: Detailed description
+  descriptionEn?: string;
   markets: MarketType[];
+  timeframes?: TimeframeType[]; // Phase 7: Applicable timeframes
   difficulty: 1 | 2 | 3; // 1=Easy, 2=Medium, 3=Hard
+  riskLevel?: "low" | "medium" | "high" | "very-high"; // Phase 7: Risk level
+
+  // Phase 7: Theory and academic background
+  theory?: {
+    origin?: string; // Where the strategy originated
+    author?: string; // Creator/Author name
+    authorInfo?: string; // Brief author bio
+    year?: number; // Year published/created
+    paper?: string; // Academic paper name
+    paperUrl?: string; // Link to paper
+    academicBasis?: string; // Academic foundation
+  };
+
   logic: {
     entry: string[];
     exit: string[];
+    positionSizing?: string; // Phase 7: Position sizing rules
+    riskManagement?: string; // Phase 7: Risk management rules
   };
   params: {
     name: string;
     nameEn: string;
     default: number | string;
     range: string;
+    description?: string; // Phase 7: Parameter description
   }[];
   pros: string[];
   cons: string[];
+
+  // Phase 7: Best practices guidance
+  bestPractices?: {
+    dos: string[]; // Things to do
+    donts: string[]; // Things to avoid
+    tips: string[]; // Practical tips
+    commonMistakes?: string[]; // Common mistakes to avoid
+  };
+
+  // Phase 7: Period significance
+  periodSignificance?: {
+    shortTerm: string; // Intraday/weekly significance
+    mediumTerm: string; // Weekly/monthly significance
+    longTerm: string; // Quarterly/yearly significance
+    bestPeriod: string; // Optimal usage period
+  };
+
   bestFor: string;
   bestForEn: string;
+  notSuitableFor?: string; // Phase 7: When not to use
+
+  // Phase 7: Historical performance reference
+  historicalPerformance?: {
+    backtestPeriod?: string;
+    annualReturn?: number;
+    maxDrawdown?: number;
+    sharpeRatio?: number;
+    winRate?: number;
+    note?: string;
+  };
+
+  relatedStrategies?: string[]; // Phase 7: Related strategy IDs
   riskWarning?: string;
   prompt: string; // Prompt for AI generation
+
+  // Phase 7: Versioning
+  version?: string;
+  lastUpdated?: string;
 }
 
 /**
@@ -108,25 +168,64 @@ export const classicStrategies: StrategyTemplate[] = [
     name: "双均线交叉",
     nameEn: "Dual MA Crossover",
     category: "trend",
+    subcategory: "moving-average",
     type: "classic",
     icon: "📈",
     summary: "MA5/MA20 金叉死叉，华尔街经典趋势策略",
-    summaryEn: "MA5/MA20 golden/death cross, classic Wall Street trend strategy",
+    summaryEn:
+      "MA5/MA20 golden/death cross, classic Wall Street trend strategy",
+    description:
+      "双均线交叉是最基础的趋势跟踪策略，通过短期和长期移动平均线的交叉来判断趋势方向。金叉（短期上穿长期）表示上升趋势开始，死叉（短期下穿长期）表示下降趋势开始。",
     markets: ["stock", "futures", "crypto"],
+    timeframes: ["swing", "position"],
     difficulty: 1,
+    riskLevel: "medium",
+    theory: {
+      origin: "移动平均线由Charles Dow在19世纪末提出",
+      author: "Charles Dow",
+      authorInfo: "道琼斯公司创始人，道氏理论奠基人",
+      year: 1884,
+      academicBasis: "价格趋势跟踪、均值平滑",
+    },
     logic: {
       entry: ["短期均线(MA5)上穿长期均线(MA20)形成金叉时买入"],
       exit: ["短期均线(MA5)下穿长期均线(MA20)形成死叉时卖出"],
     },
     params: [
-      { name: "短期均线", nameEn: "Fast MA", default: 5, range: "5-10" },
-      { name: "长期均线", nameEn: "Slow MA", default: 20, range: "20-60" },
+      {
+        name: "短期均线",
+        nameEn: "Fast MA",
+        default: 5,
+        range: "5-10",
+        description: "常用5日、10日",
+      },
+      {
+        name: "长期均线",
+        nameEn: "Slow MA",
+        default: 20,
+        range: "20-60",
+        description: "常用20日、60日",
+      },
       { name: "止损比例", nameEn: "Stop Loss", default: "5%", range: "3-8%" },
     ],
     pros: ["逻辑简单，易于理解", "趋势明确时效果好", "参数少，不易过拟合"],
     cons: ["震荡市假信号多", "信号滞后", "频繁交易成本高"],
+    bestPractices: {
+      dos: ["配合成交量确认", "在趋势明确的市场使用", "设置止损控制风险"],
+      donts: ["不要在震荡市频繁交易", "不要忽视大周期趋势"],
+      tips: ["可结合ADX过滤震荡市", "周线金叉比日线更可靠"],
+    },
+    periodSignificance: {
+      shortTerm: "日内交叉频繁，噪音大",
+      mediumTerm: "日线级别金叉死叉较为可靠",
+      longTerm: "周线金叉死叉用于判断大趋势",
+      bestPeriod: "日线或周线级别",
+    },
     bestFor: "单边趋势行情",
     bestForEn: "Strong trending markets",
+    notSuitableFor: "震荡整理行情",
+    version: "2.0",
+    lastUpdated: "2025-01-20",
     prompt:
       "双均线交叉策略：当5日均线上穿20日均线时买入，当5日均线下穿20日均线时卖出，止损5%",
   },
@@ -162,28 +261,94 @@ export const classicStrategies: StrategyTemplate[] = [
     name: "海龟交易法",
     nameEn: "Turtle Trading",
     category: "trend",
+    subcategory: "breakout",
     type: "classic",
     icon: "🐢",
     summary: "20日突破入场，10日突破离场，传奇趋势跟踪系统",
     summaryEn: "20-day breakout entry, 10-day breakout exit, legendary system",
+    description:
+      "海龟交易法则是1983年由传奇交易员理查德·丹尼斯和威廉·埃克哈特设计的完整交易系统，用于证明优秀交易员可以被培养。他们招募了一群新手'海龟'，5年内创造了超过1.75亿美元的利润。",
     markets: ["stock", "futures", "crypto"],
+    timeframes: ["swing", "position"],
     difficulty: 2,
+    riskLevel: "medium",
+    theory: {
+      origin: "1983年芝加哥商品交易所海龟实验",
+      author: "Richard Dennis & William Eckhardt",
+      authorInfo:
+        "Richard Dennis被称为'商品交易王子'，从400美元起家创造了2亿美元财富",
+      year: 1983,
+      paper: "Way of the Turtle",
+      academicBasis: "趋势跟踪、突破交易、风险管理",
+    },
     logic: {
       entry: ["价格突破20日最高价时买入", "ATR计算仓位大小"],
       exit: ["价格跌破10日最低价时卖出", "或触发2倍ATR止损"],
+      positionSizing: "单笔风险控制在账户的1-2%，股数 = (账户×1%) / (ATR×2)",
+      riskManagement: "最大持仓不超过账户的20%，单一方向不超过10%",
     },
     params: [
-      { name: "入场周期", nameEn: "Entry Period", default: 20, range: "20-55" },
-      { name: "离场周期", nameEn: "Exit Period", default: 10, range: "10-20" },
+      {
+        name: "入场周期",
+        nameEn: "Entry Period",
+        default: 20,
+        range: "20-55",
+        description: "System 1用20日，System 2用55日",
+      },
+      {
+        name: "离场周期",
+        nameEn: "Exit Period",
+        default: 10,
+        range: "10-20",
+        description: "一般为入场周期的一半",
+      },
       { name: "ATR周期", nameEn: "ATR Period", default: 20, range: "14-20" },
-      { name: "ATR止损倍数", nameEn: "ATR Stop", default: 2, range: "1.5-3" },
+      {
+        name: "ATR止损倍数",
+        nameEn: "ATR Stop",
+        default: 2,
+        range: "1.5-3",
+        description: "止损距离=2倍ATR",
+      },
     ],
     pros: ["完整的交易系统", "包含仓位管理", "历史验证有效"],
     cons: ["回撤较大", "需要足够资金", "心理压力大"],
+    bestPractices: {
+      dos: [
+        "严格遵守入场和出场规则",
+        "使用ATR计算仓位",
+        "同时交易多个不相关品种",
+      ],
+      donts: ["不要在震荡市强行使用", "不要随意调整止损", "不要过度杠杆"],
+      tips: [
+        "可添加趋势过滤器（如200日均线）减少假突破",
+        "在强趋势市场效果最好",
+      ],
+      commonMistakes: ["止损太紧", "赢利时过早了结", "资金管理不当"],
+    },
+    periodSignificance: {
+      shortTerm: "日内不适用，信号滞后且假突破多",
+      mediumTerm: "最佳应用周期，20日突破能有效捕捉中期趋势",
+      longTerm: "可调整为55日系统用于长期趋势",
+      bestPeriod: "日线级别，持仓数周到数月",
+    },
     bestFor: "期货和加密货币趋势",
     bestForEn: "Futures and crypto trends",
+    notSuitableFor: "震荡市、高频交易、小资金账户",
+    historicalPerformance: {
+      backtestPeriod: "1983-1988 (原始海龟实验)",
+      annualReturn: 80,
+      maxDrawdown: 35,
+      sharpeRatio: 1.2,
+      winRate: 40,
+      note: "虽然胜率仅40%，但平均盈利是平均亏损的4倍以上",
+    },
+    relatedStrategies: ["classic-04"],
+    riskWarning: "海龟交易法回撤较大，需要充足资金和心理准备承受连续亏损。",
     prompt:
       "海龟交易法则：价格突破20日最高价买入，跌破10日最低价卖出，使用ATR计算仓位，止损2倍ATR",
+    version: "2.0",
+    lastUpdated: "2025-01-20",
   },
   {
     id: "classic-04",
@@ -201,7 +366,12 @@ export const classicStrategies: StrategyTemplate[] = [
       exit: ["反向突破时平仓", "或使用较短周期作为离场"],
     },
     params: [
-      { name: "通道周期", nameEn: "Channel Period", default: 20, range: "10-55" },
+      {
+        name: "通道周期",
+        nameEn: "Channel Period",
+        default: 20,
+        range: "10-55",
+      },
       { name: "止损周期", nameEn: "Stop Period", default: 10, range: "5-20" },
     ],
     pros: ["规则清晰", "无需复杂计算", "趋势捕捉能力强"],
@@ -253,7 +423,12 @@ export const classicStrategies: StrategyTemplate[] = [
       exit: ["SAR反转时立即平仓", "作为动态止损"],
     },
     params: [
-      { name: "加速因子", nameEn: "AF Step", default: 0.02, range: "0.01-0.05" },
+      {
+        name: "加速因子",
+        nameEn: "AF Step",
+        default: 0.02,
+        range: "0.01-0.05",
+      },
       { name: "最大加速", nameEn: "AF Max", default: 0.2, range: "0.1-0.3" },
     ],
     pros: ["自动追踪止损", "简单直观", "锁定利润"],
@@ -277,7 +452,10 @@ export const classicStrategies: StrategyTemplate[] = [
     markets: ["stock", "futures", "crypto"],
     difficulty: 1,
     logic: {
-      entry: ["价格触及或跌破布林带下轨时买入", "价格触及或突破布林带上轨时卖出"],
+      entry: [
+        "价格触及或跌破布林带下轨时买入",
+        "价格触及或突破布林带上轨时卖出",
+      ],
       exit: ["价格回归中轨时平仓", "或突破相反方向时止损"],
     },
     params: [
@@ -391,7 +569,12 @@ export const classicStrategies: StrategyTemplate[] = [
     params: [
       { name: "快线周期", nameEn: "Fast Period", default: 12, range: "8-15" },
       { name: "慢线周期", nameEn: "Slow Period", default: 26, range: "20-30" },
-      { name: "信号线周期", nameEn: "Signal Period", default: 9, range: "7-12" },
+      {
+        name: "信号线周期",
+        nameEn: "Signal Period",
+        default: 9,
+        range: "7-12",
+      },
     ],
     pros: ["应用最广泛", "趋势和动量兼顾", "信号明确"],
     cons: ["滞后性", "震荡市假信号", "需要过滤"],
@@ -418,7 +601,12 @@ export const classicStrategies: StrategyTemplate[] = [
     params: [
       { name: "周期", nameEn: "Period", default: 14, range: "10-21" },
       { name: "超卖线", nameEn: "Oversold", default: -80, range: "-90 to -70" },
-      { name: "超买线", nameEn: "Overbought", default: -20, range: "-30 to -10" },
+      {
+        name: "超买线",
+        nameEn: "Overbought",
+        default: -20,
+        range: "-30 to -10",
+      },
     ],
     pros: ["反应灵敏", "适合短线", "与RSI互补"],
     cons: ["信号频繁", "需要过滤", "趋势市表现差"],
@@ -443,8 +631,18 @@ export const classicStrategies: StrategyTemplate[] = [
       exit: ["价格跌破N/2日最低价时止损", "或达到目标收益时止盈"],
     },
     params: [
-      { name: "突破周期", nameEn: "Breakout Period", default: 20, range: "10-30" },
-      { name: "成交量倍数", nameEn: "Volume Multiple", default: 1.5, range: "1.2-2" },
+      {
+        name: "突破周期",
+        nameEn: "Breakout Period",
+        default: 20,
+        range: "10-30",
+      },
+      {
+        name: "成交量倍数",
+        nameEn: "Volume Multiple",
+        default: 1.5,
+        range: "1.2-2",
+      },
       { name: "止损周期", nameEn: "Stop Period", default: 10, range: "5-15" },
     ],
     pros: ["捕捉强势股", "成交量确认可靠性高", "趋势初期入场"],
@@ -495,13 +693,31 @@ export const classicStrategies: StrategyTemplate[] = [
     markets: ["stock", "futures", "crypto"],
     difficulty: 3,
     logic: {
-      entry: ["识别两个相近的低点形成W形态", "价格突破颈线（两低点间的高点）时买入"],
+      entry: [
+        "识别两个相近的低点形成W形态",
+        "价格突破颈线（两低点间的高点）时买入",
+      ],
       exit: ["止损设在第二个底部下方", "目标价为颈线到底部距离的1-2倍"],
     },
     params: [
-      { name: "形态识别周期", nameEn: "Pattern Period", default: 60, range: "30-120" },
-      { name: "颈线突破确认", nameEn: "Neckline Break", default: "1%", range: "0.5-2%" },
-      { name: "底部容差", nameEn: "Bottom Tolerance", default: "3%", range: "1-5%" },
+      {
+        name: "形态识别周期",
+        nameEn: "Pattern Period",
+        default: 60,
+        range: "30-120",
+      },
+      {
+        name: "颈线突破确认",
+        nameEn: "Neckline Break",
+        default: "1%",
+        range: "0.5-2%",
+      },
+      {
+        name: "底部容差",
+        nameEn: "Bottom Tolerance",
+        default: "3%",
+        range: "1-5%",
+      },
     ],
     pros: ["可靠的反转信号", "止损明确", "盈亏比好"],
     cons: ["形态识别主观", "出现频率低", "需要人工确认"],
@@ -526,8 +742,18 @@ export const classicStrategies: StrategyTemplate[] = [
       exit: ["止损设在右肩下方", "目标价为头部到颈线距离"],
     },
     params: [
-      { name: "形态周期", nameEn: "Pattern Period", default: 90, range: "60-180" },
-      { name: "颈线突破确认", nameEn: "Neckline Break", default: "2%", range: "1-3%" },
+      {
+        name: "形态周期",
+        nameEn: "Pattern Period",
+        default: 90,
+        range: "60-180",
+      },
+      {
+        name: "颈线突破确认",
+        nameEn: "Neckline Break",
+        default: "2%",
+        range: "1-3%",
+      },
     ],
     pros: ["经典反转形态", "成功率较高", "目标明确"],
     cons: ["形态识别难度大", "耗时长", "需要经验"],
@@ -548,12 +774,25 @@ export const classicStrategies: StrategyTemplate[] = [
     markets: ["stock", "futures", "crypto"],
     difficulty: 2,
     logic: {
-      entry: ["识别高点降低、低点抬高的收敛三角形", "价格突破上轨做多，突破下轨做空"],
+      entry: [
+        "识别高点降低、低点抬高的收敛三角形",
+        "价格突破上轨做多，突破下轨做空",
+      ],
       exit: ["止损设在三角形内部", "目标为三角形起始高度"],
     },
     params: [
-      { name: "最小形态周期", nameEn: "Min Period", default: 20, range: "15-40" },
-      { name: "突破确认", nameEn: "Break Confirm", default: "1.5%", range: "1-3%" },
+      {
+        name: "最小形态周期",
+        nameEn: "Min Period",
+        default: 20,
+        range: "15-40",
+      },
+      {
+        name: "突破确认",
+        nameEn: "Break Confirm",
+        default: "1.5%",
+        range: "1-3%",
+      },
     ],
     pros: ["方向性突破", "止损明确", "可做多做空"],
     cons: ["假突破风险", "需要及时识别", "震荡时间不确定"],
@@ -580,7 +819,12 @@ export const classicStrategies: StrategyTemplate[] = [
       exit: ["MACD死叉", "或RSI高于80时卖出"],
     },
     params: [
-      { name: "MACD参数", nameEn: "MACD", default: "12-26-9", range: "Standard" },
+      {
+        name: "MACD参数",
+        nameEn: "MACD",
+        default: "12-26-9",
+        range: "Standard",
+      },
       { name: "RSI周期", nameEn: "RSI Period", default: 14, range: "10-21" },
       { name: "RSI阈值", nameEn: "RSI Threshold", default: 60, range: "55-70" },
     ],
@@ -609,7 +853,12 @@ export const classicStrategies: StrategyTemplate[] = [
     params: [
       { name: "短期均线", nameEn: "Fast MA", default: 5, range: "5-10" },
       { name: "长期均线", nameEn: "Slow MA", default: 20, range: "15-30" },
-      { name: "量比阈值", nameEn: "Volume Ratio", default: 1.5, range: "1.2-2" },
+      {
+        name: "量比阈值",
+        nameEn: "Volume Ratio",
+        default: 1.5,
+        range: "1.2-2",
+      },
     ],
     pros: ["成交量确认可靠", "减少假突破", "适合A股"],
     cons: ["成交量造假风险", "需要实时监控", "参数敏感"],
@@ -669,9 +918,19 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["每月末重新排名", "卖出排名下降到后50%的标的"],
     },
     params: [
-      { name: "回看周期", nameEn: "Lookback", default: "12个月", range: "3-12个月" },
+      {
+        name: "回看周期",
+        nameEn: "Lookback",
+        default: "12个月",
+        range: "3-12个月",
+      },
       { name: "持仓数量", nameEn: "Top N", default: 10, range: "5-20" },
-      { name: "轮动频率", nameEn: "Rebalance", default: "月度", range: "周/月/季" },
+      {
+        name: "轮动频率",
+        nameEn: "Rebalance",
+        default: "月度",
+        range: "周/月/季",
+      },
     ],
     pros: ["学术研究支持", "长期有效", "逻辑简单"],
     cons: ["动量反转风险", "交易成本高", "需要选股池"],
@@ -696,9 +955,24 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["PE/PB上升到行业平均以上时卖出", "或持有固定周期后轮动"],
     },
     params: [
-      { name: "PE阈值", nameEn: "PE Threshold", default: "行业中位数", range: "行业中位数以下" },
-      { name: "PB排名", nameEn: "PB Rank", default: "前20%", range: "前10-30%" },
-      { name: "轮动频率", nameEn: "Rebalance", default: "季度", range: "月/季/半年" },
+      {
+        name: "PE阈值",
+        nameEn: "PE Threshold",
+        default: "行业中位数",
+        range: "行业中位数以下",
+      },
+      {
+        name: "PB排名",
+        nameEn: "PB Rank",
+        default: "前20%",
+        range: "前10-30%",
+      },
+      {
+        name: "轮动频率",
+        nameEn: "Rebalance",
+        default: "季度",
+        range: "月/季/半年",
+      },
     ],
     pros: ["价值投资经典", "低估值保护", "长期收益稳定"],
     cons: ["价值陷阱风险", "可能长期跑输成长股", "需要基本面数据"],
@@ -723,9 +997,24 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["ROE下降到10%以下时卖出", "或负债率上升到60%以上时卖出"],
     },
     params: [
-      { name: "ROE阈值", nameEn: "ROE Threshold", default: "15%", range: "10-20%" },
-      { name: "负债率上限", nameEn: "Debt Ratio Max", default: "50%", range: "40-60%" },
-      { name: "轮动频率", nameEn: "Rebalance", default: "季度", range: "季/半年" },
+      {
+        name: "ROE阈值",
+        nameEn: "ROE Threshold",
+        default: "15%",
+        range: "10-20%",
+      },
+      {
+        name: "负债率上限",
+        nameEn: "Debt Ratio Max",
+        default: "50%",
+        range: "40-60%",
+      },
+      {
+        name: "轮动频率",
+        nameEn: "Rebalance",
+        default: "季度",
+        range: "季/半年",
+      },
     ],
     pros: ["选择优质公司", "风险较低", "收益稳定"],
     cons: ["可能错过高成长股", "需要财务数据", "估值可能偏高"],
@@ -750,9 +1039,24 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["市值增长到中等以上时卖出", "定期轮动"],
     },
     params: [
-      { name: "市值分位", nameEn: "Cap Percentile", default: "最小10%", range: "5-20%" },
-      { name: "流动性过滤", nameEn: "Liquidity Filter", default: "日成交额>1000万", range: "500-5000万" },
-      { name: "轮动频率", nameEn: "Rebalance", default: "月度", range: "周/月" },
+      {
+        name: "市值分位",
+        nameEn: "Cap Percentile",
+        default: "最小10%",
+        range: "5-20%",
+      },
+      {
+        name: "流动性过滤",
+        nameEn: "Liquidity Filter",
+        default: "日成交额>1000万",
+        range: "500-5000万",
+      },
+      {
+        name: "轮动频率",
+        nameEn: "Rebalance",
+        default: "月度",
+        range: "周/月",
+      },
     ],
     pros: ["小盘股溢价", "历史超额收益明显", "分散投资"],
     cons: ["流动性风险", "波动大", "壳价值扰动"],
@@ -778,9 +1082,24 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["波动率上升到平均以上时卖出", "定期轮动"],
     },
     params: [
-      { name: "波动率周期", nameEn: "Vol Period", default: 60, range: "20-120" },
-      { name: "选股比例", nameEn: "Select Ratio", default: "最低20%", range: "10-30%" },
-      { name: "轮动频率", nameEn: "Rebalance", default: "月度", range: "周/月" },
+      {
+        name: "波动率周期",
+        nameEn: "Vol Period",
+        default: 60,
+        range: "20-120",
+      },
+      {
+        name: "选股比例",
+        nameEn: "Select Ratio",
+        default: "最低20%",
+        range: "10-30%",
+      },
+      {
+        name: "轮动频率",
+        nameEn: "Rebalance",
+        default: "月度",
+        range: "周/月",
+      },
     ],
     pros: ["风险较低", "夏普比率高", "适合保守投资者"],
     cons: ["牛市可能跑输", "收益有限", "可能集中于特定行业"],
@@ -807,10 +1126,30 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["综合得分下降到后50%时卖出", "定期重新打分"],
     },
     params: [
-      { name: "价值权重", nameEn: "Value Weight", default: "25%", range: "0-50%" },
-      { name: "动量权重", nameEn: "Momentum Weight", default: "25%", range: "0-50%" },
-      { name: "质量权重", nameEn: "Quality Weight", default: "25%", range: "0-50%" },
-      { name: "波动权重", nameEn: "Vol Weight", default: "25%", range: "0-50%" },
+      {
+        name: "价值权重",
+        nameEn: "Value Weight",
+        default: "25%",
+        range: "0-50%",
+      },
+      {
+        name: "动量权重",
+        nameEn: "Momentum Weight",
+        default: "25%",
+        range: "0-50%",
+      },
+      {
+        name: "质量权重",
+        nameEn: "Quality Weight",
+        default: "25%",
+        range: "0-50%",
+      },
+      {
+        name: "波动权重",
+        nameEn: "Vol Weight",
+        default: "25%",
+        range: "0-50%",
+      },
     ],
     pros: ["多维度选股", "风险分散", "可定制化"],
     cons: ["因子权重需要优化", "过拟合风险", "实现复杂"],
@@ -831,13 +1170,32 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["stock", "futures", "crypto"],
     difficulty: 3,
     logic: {
-      entry: ["找出协整的股票对", "价差偏离均值2倍标准差时开仓", "做多被低估的，做空被高估的"],
+      entry: [
+        "找出协整的股票对",
+        "价差偏离均值2倍标准差时开仓",
+        "做多被低估的，做空被高估的",
+      ],
       exit: ["价差回归均值时平仓", "或价差继续扩大时止损"],
     },
     params: [
-      { name: "协整检验周期", nameEn: "Coint Period", default: 250, range: "60-500" },
-      { name: "开仓阈值", nameEn: "Entry Threshold", default: "2倍标准差", range: "1.5-3倍" },
-      { name: "止损阈值", nameEn: "Stop Loss", default: "3倍标准差", range: "2.5-4倍" },
+      {
+        name: "协整检验周期",
+        nameEn: "Coint Period",
+        default: 250,
+        range: "60-500",
+      },
+      {
+        name: "开仓阈值",
+        nameEn: "Entry Threshold",
+        default: "2倍标准差",
+        range: "1.5-3倍",
+      },
+      {
+        name: "止损阈值",
+        nameEn: "Stop Loss",
+        default: "3倍标准差",
+        range: "2.5-4倍",
+      },
     ],
     pros: ["市场中性", "波动率低", "不依赖方向"],
     cons: ["协整关系可能破裂", "需要融券", "交易成本高"],
@@ -864,7 +1222,12 @@ export const popularStrategies: StrategyTemplate[] = [
     params: [
       { name: "回看周期", nameEn: "Lookback", default: 100, range: "50-200" },
       { name: "偏离阈值", nameEn: "Deviation", default: "2σ", range: "1.5-3σ" },
-      { name: "持仓上限", nameEn: "Position Limit", default: "10%", range: "5-20%" },
+      {
+        name: "持仓上限",
+        nameEn: "Position Limit",
+        default: "10%",
+        range: "5-20%",
+      },
     ],
     pros: ["数学基础扎实", "可量化风险", "多策略组合"],
     cons: ["统计关系可能失效", "黑天鹅风险", "需要高级编程"],
@@ -887,12 +1250,26 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["crypto", "stock"],
     difficulty: 2,
     logic: {
-      entry: ["设定价格区间和网格数量", "每下跌一格买入固定数量", "每上涨一格卖出固定数量"],
+      entry: [
+        "设定价格区间和网格数量",
+        "每下跌一格买入固定数量",
+        "每上涨一格卖出固定数量",
+      ],
       exit: ["价格突破区间上限时全部卖出", "价格突破区间下限时止损或持有"],
     },
     params: [
-      { name: "价格上限", nameEn: "Upper Bound", default: "当前价+20%", range: "+10-50%" },
-      { name: "价格下限", nameEn: "Lower Bound", default: "当前价-20%", range: "-10-50%" },
+      {
+        name: "价格上限",
+        nameEn: "Upper Bound",
+        default: "当前价+20%",
+        range: "+10-50%",
+      },
+      {
+        name: "价格下限",
+        nameEn: "Lower Bound",
+        default: "当前价-20%",
+        range: "-10-50%",
+      },
       { name: "网格数量", nameEn: "Grid Count", default: 10, range: "5-50" },
     ],
     pros: ["震荡市稳定盈利", "自动化执行", "无需预测方向"],
@@ -919,8 +1296,18 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["总成本回本后全部平仓", "或达到最大加仓次数止损"],
     },
     params: [
-      { name: "首次仓位", nameEn: "Initial Size", default: "1%资金", range: "0.5-2%" },
-      { name: "加仓间隔", nameEn: "Add Interval", default: "5%", range: "3-10%" },
+      {
+        name: "首次仓位",
+        nameEn: "Initial Size",
+        default: "1%资金",
+        range: "0.5-2%",
+      },
+      {
+        name: "加仓间隔",
+        nameEn: "Add Interval",
+        default: "5%",
+        range: "3-10%",
+      },
       { name: "最大加仓次数", nameEn: "Max Adds", default: 5, range: "3-8" },
     ],
     pros: ["高胜率", "震荡市有效", "简单直接"],
@@ -943,13 +1330,27 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["crypto"],
     difficulty: 3,
     logic: {
-      entry: ["当资金费率为正且较高时", "做空永续合约，做多现货", "收取资金费率"],
+      entry: [
+        "当资金费率为正且较高时",
+        "做空永续合约，做多现货",
+        "收取资金费率",
+      ],
       exit: ["资金费率转负或接近0时平仓", "或持有长期收息"],
     },
     params: [
-      { name: "费率阈值", nameEn: "Rate Threshold", default: "0.05%", range: "0.03-0.1%" },
+      {
+        name: "费率阈值",
+        nameEn: "Rate Threshold",
+        default: "0.05%",
+        range: "0.03-0.1%",
+      },
       { name: "杠杆倍数", nameEn: "Leverage", default: "1x", range: "1-3x" },
-      { name: "持仓周期", nameEn: "Hold Period", default: "8小时", range: "8-24小时" },
+      {
+        name: "持仓周期",
+        nameEn: "Hold Period",
+        default: "8小时",
+        range: "8-24小时",
+      },
     ],
     pros: ["相对低风险", "稳定收益", "对冲市场风险"],
     cons: ["资金效率低", "交易所风险", "费率可能反转"],
@@ -970,12 +1371,25 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["crypto"],
     difficulty: 3,
     logic: {
-      entry: ["监控多个交易所的同一币种价格", "价差超过交易成本时在低价所买入高价所卖出"],
+      entry: [
+        "监控多个交易所的同一币种价格",
+        "价差超过交易成本时在低价所买入高价所卖出",
+      ],
       exit: ["转币或平仓锁定利润", "价差消失时停止"],
     },
     params: [
-      { name: "价差阈值", nameEn: "Spread Threshold", default: "0.5%", range: "0.3-1%" },
-      { name: "单笔金额", nameEn: "Order Size", default: "根据流动性", range: "动态" },
+      {
+        name: "价差阈值",
+        nameEn: "Spread Threshold",
+        default: "0.5%",
+        range: "0.3-1%",
+      },
+      {
+        name: "单笔金额",
+        nameEn: "Order Size",
+        default: "根据流动性",
+        range: "动态",
+      },
     ],
     pros: ["几乎无风险", "即时利润", "可量化"],
     cons: ["机会稀少", "需要多所资金", "提币延迟风险"],
@@ -1002,8 +1416,18 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["交割日价差收敛", "或价差回到正常范围时提前平仓"],
     },
     params: [
-      { name: "基差阈值", nameEn: "Basis Threshold", default: "年化5%", range: "年化3-10%" },
-      { name: "持有成本", nameEn: "Carry Cost", default: "2%/年", range: "1-4%/年" },
+      {
+        name: "基差阈值",
+        nameEn: "Basis Threshold",
+        default: "年化5%",
+        range: "年化3-10%",
+      },
+      {
+        name: "持有成本",
+        nameEn: "Carry Cost",
+        default: "2%/年",
+        range: "1-4%/年",
+      },
     ],
     pros: ["风险低", "收益确定", "适合大资金"],
     cons: ["资金占用大", "收益有限", "需要交割能力"],
@@ -1024,12 +1448,26 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["futures"],
     difficulty: 2,
     logic: {
-      entry: ["近远月价差偏离历史均值", "价差过大时卖远买近", "价差过小时买远卖近"],
+      entry: [
+        "近远月价差偏离历史均值",
+        "价差过大时卖远买近",
+        "价差过小时买远卖近",
+      ],
       exit: ["价差回归均值时平仓", "或换月前平仓"],
     },
     params: [
-      { name: "价差均值", nameEn: "Spread Mean", default: "历史60日均值", range: "动态" },
-      { name: "开仓阈值", nameEn: "Entry Threshold", default: "2倍标准差", range: "1.5-3倍" },
+      {
+        name: "价差均值",
+        nameEn: "Spread Mean",
+        default: "历史60日均值",
+        range: "动态",
+      },
+      {
+        name: "开仓阈值",
+        nameEn: "Entry Threshold",
+        default: "2倍标准差",
+        range: "1.5-3倍",
+      },
     ],
     pros: ["双边风险对冲", "波动相对小", "不依赖方向"],
     cons: ["收益有限", "需要换月管理", "流动性问题"],
@@ -1054,8 +1492,18 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["比值回归均值时平仓", "或触发止损"],
     },
     params: [
-      { name: "比值均值", nameEn: "Ratio Mean", default: "历史均值", range: "动态计算" },
-      { name: "开仓阈值", nameEn: "Entry Threshold", default: "2倍标准差", range: "1.5-3倍" },
+      {
+        name: "比值均值",
+        nameEn: "Ratio Mean",
+        default: "历史均值",
+        range: "动态计算",
+      },
+      {
+        name: "开仓阈值",
+        nameEn: "Entry Threshold",
+        default: "2倍标准差",
+        range: "1.5-3倍",
+      },
     ],
     pros: ["基本面支撑", "风险可控", "多样化策略"],
     cons: ["相关性可能变化", "需要行业知识", "流动性不匹配"],
@@ -1076,12 +1524,25 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["futures"],
     difficulty: 3,
     logic: {
-      entry: ["预期基差走强时做多基差（买现卖期）", "预期基差走弱时做空基差（卖现买期）"],
+      entry: [
+        "预期基差走强时做多基差（买现卖期）",
+        "预期基差走弱时做空基差（卖现买期）",
+      ],
       exit: ["基差达到预期目标时平仓", "或反向变化时止损"],
     },
     params: [
-      { name: "基差历史分位", nameEn: "Basis Percentile", default: "看历史分布", range: "10-90%" },
-      { name: "目标收益", nameEn: "Target Return", default: "2%", range: "1-5%" },
+      {
+        name: "基差历史分位",
+        nameEn: "Basis Percentile",
+        default: "看历史分布",
+        range: "10-90%",
+      },
+      {
+        name: "目标收益",
+        nameEn: "Target Return",
+        default: "2%",
+        range: "1-5%",
+      },
     ],
     pros: ["专业期货策略", "风险可控", "可结合基本面"],
     cons: ["需要专业知识", "判断难度大", "资金占用多"],
@@ -1108,8 +1569,18 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["盘中反向突破另一端止损", "收盘前平仓"],
     },
     params: [
-      { name: "区间时长", nameEn: "Range Period", default: 30, range: "15-60分钟" },
-      { name: "突破确认", nameEn: "Break Confirm", default: "0.3%", range: "0.2-0.5%" },
+      {
+        name: "区间时长",
+        nameEn: "Range Period",
+        default: 30,
+        range: "15-60分钟",
+      },
+      {
+        name: "突破确认",
+        nameEn: "Break Confirm",
+        default: "0.3%",
+        range: "0.2-0.5%",
+      },
     ],
     pros: ["规则明确", "日内了结", "波动率交易"],
     cons: ["假突破风险", "需要实时盯盘", "震荡日亏损"],
@@ -1134,8 +1605,18 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["创新高后跌破5分钟均线止盈", "跌破买入价2%止损", "尾盘清仓"],
     },
     params: [
-      { name: "强势筛选", nameEn: "Strong Filter", default: "涨幅>3%", range: "2-5%" },
-      { name: "回调幅度", nameEn: "Pullback", default: "0.5-1%", range: "0.3-2%" },
+      {
+        name: "强势筛选",
+        nameEn: "Strong Filter",
+        default: "涨幅>3%",
+        range: "2-5%",
+      },
+      {
+        name: "回调幅度",
+        nameEn: "Pullback",
+        default: "0.5-1%",
+        range: "0.3-2%",
+      },
       { name: "止损", nameEn: "Stop Loss", default: "2%", range: "1-3%" },
     ],
     pros: ["追随强势股", "日内了结", "胜率较高"],
@@ -1161,8 +1642,18 @@ export const popularStrategies: StrategyTemplate[] = [
       exit: ["次日开盘观察", "高开高走持有，低开或冲高回落卖出"],
     },
     params: [
-      { name: "尾盘时段", nameEn: "EOD Period", default: "最后30分钟", range: "15-60分钟" },
-      { name: "涨幅阈值", nameEn: "Rise Threshold", default: "1%", range: "0.5-2%" },
+      {
+        name: "尾盘时段",
+        nameEn: "EOD Period",
+        default: "最后30分钟",
+        range: "15-60分钟",
+      },
+      {
+        name: "涨幅阈值",
+        nameEn: "Rise Threshold",
+        default: "1%",
+        range: "0.5-2%",
+      },
       { name: "量比阈值", nameEn: "Volume Ratio", default: 2, range: "1.5-3" },
     ],
     pros: ["捕捉次日高开", "规则简单", "隔夜持仓"],
@@ -1184,13 +1675,32 @@ export const popularStrategies: StrategyTemplate[] = [
     markets: ["stock", "futures"],
     difficulty: 2,
     logic: {
-      entry: ["高开缺口>2%：等待回补做多", "低开缺口>2%：等待回补做空", "或顺势延续交易"],
+      entry: [
+        "高开缺口>2%：等待回补做多",
+        "低开缺口>2%：等待回补做空",
+        "或顺势延续交易",
+      ],
       exit: ["缺口回补完成时平仓", "或反向突破时止损"],
     },
     params: [
-      { name: "缺口阈值", nameEn: "Gap Threshold", default: "2%", range: "1-3%" },
-      { name: "回补目标", nameEn: "Fill Target", default: "前日收盘价", range: "50-100%回补" },
-      { name: "止损", nameEn: "Stop Loss", default: "缺口外1%", range: "0.5-2%" },
+      {
+        name: "缺口阈值",
+        nameEn: "Gap Threshold",
+        default: "2%",
+        range: "1-3%",
+      },
+      {
+        name: "回补目标",
+        nameEn: "Fill Target",
+        default: "前日收盘价",
+        range: "50-100%回补",
+      },
+      {
+        name: "止损",
+        nameEn: "Stop Loss",
+        default: "缺口外1%",
+        range: "0.5-2%",
+      },
     ],
     pros: ["统计规律支撑", "目标明确", "风险可控"],
     cons: ["不是所有缺口都回补", "延续缺口难判断", "需要经验"],
@@ -1202,30 +1712,58 @@ export const popularStrategies: StrategyTemplate[] = [
 ];
 
 // =============================================================================
+// IMPORT ADDITIONAL STRATEGIES / 导入额外策略
+// =============================================================================
+
+import { academicStrategies } from "./academic";
+import { practitionerStrategies } from "./practitioner";
+
+// Re-export for convenience
+export { academicStrategies } from "./academic";
+export { practitionerStrategies } from "./practitioner";
+
+// =============================================================================
 // HELPER FUNCTIONS / 辅助函数
 // =============================================================================
 
 /**
- * Get all strategies
+ * Get all strategies (Phase 7: Now includes academic and practitioner strategies)
+ * Total: 40 classic/popular + 10 academic + 10 practitioner = 60 strategies
  */
 export function getAllStrategies(): StrategyTemplate[] {
-  return [...classicStrategies, ...popularStrategies];
+  return [
+    ...classicStrategies,
+    ...popularStrategies,
+    ...academicStrategies,
+    ...practitionerStrategies,
+  ];
 }
 
 /**
- * Get strategies by type
+ * Get strategies by type (Phase 7: Added academic and practitioner types)
  */
 export function getStrategiesByType(
-  type: "classic" | "popular"
+  type: "classic" | "popular" | "academic" | "practitioner",
 ): StrategyTemplate[] {
-  return type === "classic" ? classicStrategies : popularStrategies;
+  switch (type) {
+    case "classic":
+      return classicStrategies;
+    case "popular":
+      return popularStrategies;
+    case "academic":
+      return academicStrategies;
+    case "practitioner":
+      return practitionerStrategies;
+    default:
+      return [];
+  }
 }
 
 /**
  * Get strategies by category
  */
 export function getStrategiesByCategory(
-  category: StrategyCategory
+  category: StrategyCategory,
 ): StrategyTemplate[] {
   return getAllStrategies().filter((s) => s.category === category);
 }
@@ -1247,6 +1785,6 @@ export function searchStrategies(keyword: string): StrategyTemplate[] {
       s.name.toLowerCase().includes(lowerKeyword) ||
       s.nameEn.toLowerCase().includes(lowerKeyword) ||
       s.summary.toLowerCase().includes(lowerKeyword) ||
-      s.summaryEn.toLowerCase().includes(lowerKeyword)
+      s.summaryEn.toLowerCase().includes(lowerKeyword),
   );
 }

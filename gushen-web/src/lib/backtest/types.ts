@@ -65,6 +65,11 @@ export interface DetailedTrade {
   date: string; // ISO date string
   type: "buy" | "sell";
 
+  // Symbol info / 标的信息 (Phase 7 新增)
+  symbol: string; // Stock symbol code (股票代码)
+  symbolName: string; // Stock name (股票名称, e.g., "贵州茅台")
+  market?: string; // Market name (市场, e.g., "上海"/"深圳")
+
   // Execution details / 执行详情
   signalPrice: number; // Price when signal triggered (信号触发时的价格)
   executePrice: number; // Actual execution price with slippage (实际成交价含滑点)
@@ -78,6 +83,10 @@ export interface DetailedTrade {
   lotCalculation: LotCalculation; // Lot size calculation details (手数计算详情)
   requestedQuantity: number; // Original calculated quantity (原始计算数量)
   actualQuantity: number; // Actual traded quantity after lot rounding (实际成交数量)
+  lots: number; // Number of lots (手数, Phase 7 新增)
+  lotSize: number; // Shares per lot (每手股数, Phase 7 新增)
+  quantityUnit: string; // Unit for display (显示单位: "股"/"手"/"张", Phase 7 新增)
+  orderValue: number; // Order value = quantity * price (订单金额, Phase 7 新增)
 
   // Position changes / 持仓变化
   cashBefore: number;
@@ -96,6 +105,7 @@ export interface DetailedTrade {
   // Signal information / 信号信息
   triggerReason: string; // Signal trigger reason (触发原因)
   indicatorValues: Record<string, number>; // Indicator values at trigger (触发时的指标值)
+  strategyName?: string; // Strategy name (策略名称, Phase 7 新增)
 }
 
 /**

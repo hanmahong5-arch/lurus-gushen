@@ -34,6 +34,15 @@ interface BacktestResult {
     reason: string;
     pnl?: number;
     pnlPercent?: number;
+    // Phase 7: Enhanced fields (optional for backward compatibility)
+    symbol?: string;
+    symbolName?: string;
+    executePrice?: number;
+    actualQuantity?: number;
+    lots?: number;
+    lotSize?: number;
+    quantityUnit?: string;
+    orderValue?: number;
   }>;
   strategy?: {
     name: string;
@@ -561,7 +570,7 @@ export function BacktestPanel({
               </div>
             )}
 
-            {/* Trade List */}
+            {/* Trade List - Enhanced with symbol name and lots info (Phase 7) */}
             {showTrades &&
               displayResult.trades &&
               displayResult.trades.length > 0 && (
@@ -569,44 +578,111 @@ export function BacktestPanel({
                   <h4 className="text-sm font-medium text-white mb-3">
                     交易记录 / Trade History ({displayResult.trades.length}笔)
                   </h4>
-                  <div className="max-h-60 overflow-y-auto space-y-2">
-                    {displayResult.trades.slice(-20).map((trade) => (
-                      <div
-                        key={trade.id}
-                        className={cn(
-                          "flex items-center justify-between p-2 rounded text-xs",
-                          trade.type === "buy" ? "bg-profit/10" : "bg-loss/10",
-                        )}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={
-                              trade.type === "buy" ? "text-profit" : "text-loss"
-                            }
-                          >
-                            {trade.type === "buy" ? "买入" : "卖出"}
-                          </span>
-                          <span className="text-white/70">
-                            ¥{trade.price.toFixed(2)} × {trade.size}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-white/40">{trade.reason}</span>
-                          {trade.pnlPercent !== undefined && (
-                            <span
-                              className={
-                                trade.pnlPercent >= 0
-                                  ? "text-profit"
-                                  : "text-loss"
-                              }
-                            >
-                              {trade.pnlPercent >= 0 ? "+" : ""}
-                              {trade.pnlPercent.toFixed(2)}%
-                            </span>
+                  <div className="max-h-80 overflow-y-auto space-y-2">
+                    {displayResult.trades.slice(-20).map((trade) => {
+                      // Use enhanced fields if available, fallback to legacy
+                      const displayPrice = trade.executePrice ?? trade.price;
+                      const displayQty = trade.actualQuantity ?? trade.size;
+                      const unit = trade.quantityUnit ?? "股";
+                      const hasEnhancedInfo =
+                        trade.symbolName || trade.lots !== undefined;
+
+                      return (
+                        <div
+                          key={trade.id}
+                          className={cn(
+                            "p-2 rounded text-xs",
+                            trade.type === "buy"
+                              ? "bg-profit/10"
+                              : "bg-loss/10",
                           )}
+                        >
+                          {/* Row 1: Direction, Symbol, Quantity */}
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span
+                                className={cn(
+                                  "font-medium px-1.5 py-0.5 rounded",
+                                  trade.type === "buy"
+                                    ? "text-profit bg-profit/20"
+                                    : "text-loss bg-loss/20",
+                                )}
+                              >
+                                {trade.type === "buy" ? "买入" : "卖出"}
+                              </span>
+                              {/* Symbol name display (Phase 7) */}
+                              {trade.symbolName ? (
+                                <span className="text-white font-medium">
+                                  {trade.symbolName}
+                                  {trade.symbol && (
+                                    <span className="text-white/40 ml-1">
+                                      ({trade.symbol.split(".")[0]})
+                                    </span>
+                                  )}
+                                </span>
+                              ) : trade.symbol ? (
+                                <span className="text-white/70">
+                                  {trade.symbol}
+                                </span>
+                              ) : null}
+                            </div>
+                            {/* P&L display */}
+                            {trade.pnlPercent !== undefined && (
+                              <span
+                                className={cn(
+                                  "font-medium",
+                                  trade.pnlPercent >= 0
+                                    ? "text-profit"
+                                    : "text-loss",
+                                )}
+                              >
+                                {trade.pnlPercent >= 0 ? "+" : ""}
+                                {trade.pnlPercent.toFixed(2)}%
+                                {trade.pnl !== undefined && (
+                                  <span className="text-white/40 ml-1">
+                                    ({trade.pnl >= 0 ? "+" : ""}¥
+                                    {trade.pnl.toFixed(0)})
+                                  </span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Row 2: Price, Quantity, Order Value */}
+                          <div className="flex items-center justify-between mt-1.5 text-white/60">
+                            <div className="flex items-center gap-3">
+                              <span>
+                                ¥{displayPrice.toFixed(2)} ×{" "}
+                                {displayQty.toLocaleString()}
+                                {unit}
+                                {/* Show lots if available (Phase 7) */}
+                                {trade.lots !== undefined && trade.lots > 0 && (
+                                  <span className="text-white/40 ml-1">
+                                    ({trade.lots}手)
+                                  </span>
+                                )}
+                              </span>
+                              {/* Order value (Phase 7) */}
+                              {trade.orderValue !== undefined && (
+                                <span className="text-white/40">
+                                  金额: ¥
+                                  {trade.orderValue.toLocaleString(undefined, {
+                                    maximumFractionDigits: 0,
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                            {/* Reason */}
+                            <span
+                              className="text-white/40 max-w-[120px] truncate"
+                              title={trade.reason}
+                            >
+                              {trade.reason}
+                            </span>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

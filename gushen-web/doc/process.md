@@ -1134,6 +1134,136 @@ kubectl apply -f k8s/ai-qtrd/06-ingress-routes.yaml
 
 ---
 
+## 2026-01-20: Phase 7 回测交易记录修复 + 策略模板升级 / Backtest Trade Records + Strategy Template Upgrade
+
+**用户需求 User Request:**
+- 回测交易记录显示问题: 股数直接显示原始值，没有股票名称
+- 策略模板升级: 增加数量 (40→60+)，添加理论出处、周期意义、最佳实践
+- 用户策略命名: 允许用户保存和管理 AI 生成的策略
+
+**方法 Method:**
+- 创建股票名称映射服务 (200+ 常用 A 股/ETF/期货/加密货币)
+- 增强 DetailedTrade 接口添加 9 个新字段
+- 修改回测引擎在生成交易记录时填充新字段
+- 扩展 StrategyTemplate 接口添加 theory/periodSignificance/bestPractices
+- 创建 20 个新策略 (10 学术 + 10 实战)
+- 创建用户策略存储 Hook
+
+**新增内容 New Files:**
+
+1. `src/lib/backtest/symbol-info.ts` (~620 lines) - 股票名称映射服务
+   - SYMBOL_NAME_MAP: 200+ 股票名称映射
+     - 主要指数: 上证指数, 深证成指, 创业板指等
+     - 上证蓝筹 (600xxx): 贵州茅台, 招商银行, 中信证券等
+     - 上证大型 (601xxx): 中国平安, 工商银行, 中国神华等
+     - 深证主板 (000xxx): 平安银行, 万科A, 美的集团等
+     - 创业板 (300xxx): 宁德时代, 迈瑞医疗, 东方财富等
+     - 科创板 (688xxx): 中芯国际, 金山办公, 寒武纪等
+     - 北交所 (8xxxxx): 贝特瑞等
+     - 主要 ETF: 上证50ETF, 沪深300ETF等
+     - 期货品种: 股指期货, 商品期货
+     - 加密货币: BTC, ETH等
+   - getSymbolName(): 获取股票名称
+   - formatSymbolDisplay(): 格式化显示 "贵州茅台 (600519)"
+   - getQuantityUnit(): 获取数量单位 (股/手/张)
+   - getMarketName(): 获取市场名称 (上海/深圳/北京)
+   - formatQuantityWithLots(): 格式化数量 "500股 (5手)"
+   - searchSymbols(): 搜索股票
+
+2. `src/lib/strategy-templates/academic.ts` (~700 lines) - 10 个学术策略
+   - Jegadeesh-Titman Momentum (1993)
+   - Moskowitz Time Series Momentum (2012)
+   - Carhart Four-Factor Model (1997)
+   - Fama-French Value Factor (1992)
+   - Asness Quality Factor (2019)
+   - DeBondt-Thaler Reversal (1985)
+   - Banz Size Effect (1981)
+   - Ang Low Volatility Anomaly (2006)
+   - Frazzini Betting Against Beta (2014)
+   - Harvey Yield Curve Indicator (1988)
+
+3. `src/lib/strategy-templates/practitioner.ts` (~800 lines) - 10 个实战策略
+   - William O'Neil CANSLIM
+   - Jesse Livermore Pivotal Points
+   - Stan Weinstein Stage Analysis
+   - Alexander Elder Triple Screen
+   - Larry Williams Short-Term Trading
+   - Victor Sperandeo 123 Reversal
+   - Van Tharp R-Multiple System
+   - Mark Douglas Probabilistic Thinking
+   - Linda Raschke Opening Gap
+   - Martin Pring Cycle Analysis
+
+4. `src/hooks/use-saved-strategies.ts` (~320 lines) - 用户策略存储 Hook
+   - SavedStrategy 接口: id/name/description/sourceType/prompt/generatedCode/backtestHistory
+   - useSavedStrategies() Hook:
+     - CRUD 操作: saveStrategy/updateStrategy/deleteStrategy/getStrategy
+     - 回测历史: addBacktestResult (最多保留5条)
+     - 收藏管理: toggleFavorite/getFavorites
+     - 搜索过滤: searchStrategies/getStrategiesByTag
+     - 导入导出: exportStrategies/importStrategies
+   - localStorage 持久化
+
+**修改内容 Modified Files:**
+
+1. `src/lib/backtest/types.ts` - DetailedTrade 接口增强
+   - 新增字段:
+     - symbol: 股票代码
+     - symbolName: 股票名称
+     - market: 市场名称
+     - lots: 手数
+     - lotSize: 每手股数
+     - quantityUnit: 数量单位
+     - orderValue: 订单金额
+     - strategyName: 策略名称
+     - notes: 备注信息
+
+2. `src/lib/backtest/engine.ts` - 回测引擎增强
+   - 导入 symbol-info 模块函数
+   - 买入交易 (~line 568): 填充所有新字段
+   - 卖出交易 (~line 651): 填充所有新字段
+   - 最终平仓 (~line 789): 填充所有新字段
+
+3. `src/components/strategy-editor/backtest-panel.tsx` - 前端显示增强
+   - 交易记录显示改进:
+     - 显示股票名称: "贵州茅台 (600519)"
+     - 显示数量带手数: "500股 (5手)"
+     - 显示订单金额和盈亏金额
+
+4. `src/lib/strategy-templates/index.ts` - 策略模板接口扩展
+   - 新增 TimeframeType 类型: "short" | "medium" | "long" | "all"
+   - StrategyTemplate 接口新增:
+     - theory: { origin, author, authorInfo, year, paper, paperUrl, academicBasis }
+     - periodSignificance: { shortTerm, mediumTerm, longTerm, bestPeriod }
+     - bestPractices: { dos, donts, tips, commonMistakes }
+     - historicalPerformance, relatedStrategies, notSuitableFor
+     - version, lastUpdated
+   - 更新 getAllStrategies(): 包含学术和实战策略
+   - 更新 getStrategiesByType(): 支持 4 种类型
+   - 升级"双均线交叉"和"海龟交易法"添加完整 theory/bestPractices
+
+**策略模板统计 Strategy Template Statistics:**
+
+| 类型 | 数量 | 说明 |
+|------|------|------|
+| 经典策略 | 20 | 原有 classic 策略 |
+| 热门策略 | 20 | 原有 popular 策略 |
+| 学术策略 | 10 | 新增 academic.ts |
+| 实战策略 | 10 | 新增 practitioner.ts |
+| **总计** | **60** | 目标达成 ✅ |
+
+**结果 Result:**
+- 回测交易记录显示股票名称和手数信息
+- 策略模板数量从 40 增加到 60+
+- 每个策略有理论出处和最佳实践
+- 用户策略存储 Hook 可用
+- TypeScript 类型检查通过
+- 构建成功 (npm run build)
+
+**状态 Status:** ✅ 已完成 / Completed
+
+---
+
 ## 2026-01-20: Phase 6 交易面板工业级重构 / Trading Panel Industrial-Grade Overhaul
 
 **用户需求 User Request:**

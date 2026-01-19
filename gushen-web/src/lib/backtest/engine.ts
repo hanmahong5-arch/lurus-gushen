@@ -23,6 +23,8 @@ import {
   type LotCalculation,
 } from "./lot-size";
 
+import { getSymbolName, getQuantityUnit, getMarketName } from "./symbol-info";
+
 import type {
   BacktestKline,
   BacktestConfig,
@@ -561,12 +563,18 @@ export async function runBacktest(
           reason: signal.reason ?? "Buy signal",
         });
 
-        // Create detailed trade record
+        // Create detailed trade record with enhanced symbol info (Phase 7)
+        const lotSizeConfig = getLotSizeConfig(config.symbol);
         detailedTrades.push({
           id: entryTradeId,
           timestamp: bar.time,
           date,
           type: "buy",
+          // Phase 7: Symbol info
+          symbol: config.symbol,
+          symbolName: getSymbolName(config.symbol),
+          market: getMarketName(config.symbol),
+          // Execution details
           signalPrice: currentPrice,
           executePrice: buyPrice,
           slippage: slippageAmount * buySize,
@@ -574,17 +582,26 @@ export async function runBacktest(
           commission,
           commissionPercent: config.commission * 100,
           totalCost: commission + slippageAmount * buySize,
+          // Quantity info
           lotCalculation: lotCalc,
           requestedQuantity: lotCalc.requestedQuantity,
           actualQuantity: buySize,
+          // Phase 7: Enhanced quantity display
+          lots: lotCalc.actualLots,
+          lotSize: lotSizeConfig.lotSize,
+          quantityUnit: getQuantityUnit(config.symbol),
+          orderValue: buySize * buyPrice,
+          // Position changes
           cashBefore,
           cashAfter: cash,
           positionBefore,
           positionAfter: position,
           portfolioValueBefore,
           portfolioValueAfter: cash + position * currentPrice,
+          // Signal info
           triggerReason: signal.reason ?? "Buy signal",
           indicatorValues: currentIndicators as Record<string, number>,
+          strategyName: strategy.name,
         });
 
         action = `买入${formatQuantityWithUnit(buySize, config.symbol)}`;
@@ -628,13 +645,19 @@ export async function runBacktest(
 
       // Create lot calculation for sell
       const sellLotCalc = roundToLot(position, config.symbol, "sell");
+      const sellLotSizeConfig = getLotSizeConfig(config.symbol);
 
-      // Create detailed trade record
+      // Create detailed trade record with enhanced symbol info (Phase 7)
       detailedTrades.push({
         id: sellTradeId,
         timestamp: bar.time,
         date,
         type: "sell",
+        // Phase 7: Symbol info
+        symbol: config.symbol,
+        symbolName: getSymbolName(config.symbol),
+        market: getMarketName(config.symbol),
+        // Execution details
         signalPrice: currentPrice,
         executePrice: sellPrice,
         slippage: slippageAmount * position,
@@ -642,21 +665,31 @@ export async function runBacktest(
         commission,
         commissionPercent: config.commission * 100,
         totalCost: commission + slippageAmount * position,
+        // Quantity info
         lotCalculation: sellLotCalc,
         requestedQuantity: position,
         actualQuantity: position,
+        // Phase 7: Enhanced quantity display
+        lots: sellLotCalc.actualLots,
+        lotSize: sellLotSizeConfig.lotSize,
+        quantityUnit: getQuantityUnit(config.symbol),
+        orderValue: position * sellPrice,
+        // Position changes
         cashBefore,
         cashAfter: cash,
         positionBefore,
         positionAfter: 0,
         portfolioValueBefore,
         portfolioValueAfter: cash,
+        // P&L info
         pnl,
         pnlPercent,
         holdingDays,
         entryTradeId: entryTradeId ?? undefined,
+        // Signal info
         triggerReason: signal.reason ?? "Sell signal",
         indicatorValues: currentIndicators as Record<string, number>,
+        strategyName: strategy.name,
       });
 
       action = `卖出${formatQuantityWithUnit(position, config.symbol)}`;
@@ -752,12 +785,19 @@ export async function runBacktest(
 
       // Create lot calculation for final sell
       const sellLotCalc = roundToLot(position, config.symbol, "sell");
+      const finalLotSizeConfig = getLotSizeConfig(config.symbol);
 
+      // Create detailed trade record with enhanced symbol info (Phase 7)
       detailedTrades.push({
         id: sellTradeId,
         timestamp: lastBar.time,
         date,
         type: "sell",
+        // Phase 7: Symbol info
+        symbol: config.symbol,
+        symbolName: getSymbolName(config.symbol),
+        market: getMarketName(config.symbol),
+        // Execution details
         signalPrice: finalPrice,
         executePrice: finalPrice,
         slippage: 0,
@@ -765,9 +805,16 @@ export async function runBacktest(
         commission,
         commissionPercent: config.commission * 100,
         totalCost: commission,
+        // Quantity info
         lotCalculation: sellLotCalc,
         requestedQuantity: position,
         actualQuantity: position,
+        // Phase 7: Enhanced quantity display
+        lots: sellLotCalc.actualLots,
+        lotSize: finalLotSizeConfig.lotSize,
+        quantityUnit: getQuantityUnit(config.symbol),
+        orderValue: position * finalPrice,
+        // Position changes
         cashBefore: cash - revenue + commission,
         cashAfter: cash,
         positionBefore: position,
@@ -775,12 +822,15 @@ export async function runBacktest(
         portfolioValueBefore:
           cash - revenue + commission + position * finalPrice,
         portfolioValueAfter: cash,
+        // P&L info
         pnl,
         pnlPercent: (pnl / (position * positionPrice)) * 100,
         holdingDays,
         entryTradeId: entryTradeId ?? undefined,
+        // Signal info
         triggerReason: "回测结束平仓",
         indicatorValues: {},
+        strategyName: strategy.name,
       });
     }
   }
