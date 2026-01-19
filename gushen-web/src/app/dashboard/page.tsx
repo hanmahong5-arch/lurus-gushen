@@ -9,7 +9,6 @@ import { BacktestPanel } from "@/components/strategy-editor/backtest-panel";
 export default function DashboardPage() {
   const [generatedCode, setGeneratedCode] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isBacktesting, setIsBacktesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGenerate = useCallback(async (prompt: string) => {
@@ -60,14 +59,6 @@ export default function DashboardPage() {
     } finally {
       setIsGenerating(false);
     }
-  }, []);
-
-  const handleBacktest = useCallback(async () => {
-    setIsBacktesting(true);
-    // Simulate backtest delay - TODO: implement real backtest
-    // 模拟回测延迟 - TODO: 实现真实回测
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    setIsBacktesting(false);
   }, []);
 
   return (
@@ -154,11 +145,7 @@ export default function DashboardPage() {
               onGenerate={handleGenerate}
               isLoading={isGenerating}
             />
-            <BacktestPanel
-              strategyCode={generatedCode}
-              onRunBacktest={handleBacktest}
-              isRunning={isBacktesting}
-            />
+            <BacktestPanel strategyCode={generatedCode} />
           </div>
 
           {/* Right column - Code preview */}

@@ -54,6 +54,12 @@ spec:
       services:
         - name: ai-qtrd-web
           port: 3000
+    # Backtest API (frontend JS engine)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/backtest`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
   tls:
     secretName: gushen-lurus-cn-tls
 
@@ -103,11 +109,7 @@ spec:
       services:
         - name: ai-qtrd-api
           port: 8000
-    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/backtest`)
-      kind: Rule
-      services:
-        - name: ai-qtrd-api
-          port: 8000
+    # Note: /api/backtest is routed to frontend (ai-qtrd-frontend-api IngressRoute)
     # WebSocket endpoint
     - match: Host(`gushen.lurus.cn`) && PathPrefix(`/ws`)
       kind: Rule

@@ -27,13 +27,13 @@ spec:
         app: ai-qtrd-web
         component: frontend
     spec:
-      # Schedule on master node (cloud-ubuntu-1-16c32g)
+      # Schedule on worker node (cloud-ubuntu-3-2c2g) where image is available
       nodeSelector:
-        kubernetes.io/hostname: cloud-ubuntu-1-16c32g
+        kubernetes.io/hostname: cloud-ubuntu-3-2c2g
 
       containers:
         - name: web
-          image: docker.io/library/gushen-web:latest
+          image: docker.io/library/gushen-web:v10
           imagePullPolicy: Never # Use local image
           ports:
             - containerPort: 3000
