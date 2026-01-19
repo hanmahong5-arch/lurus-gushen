@@ -1,0 +1,79 @@
+# ============================================
+# AI-QTRD Web Frontend Deployment
+# Next.js Application for Gushen
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-qtrd-web
+  namespace: ai-qtrd
+  labels:
+    app: ai-qtrd-web
+    component: frontend
+    version: "1.0.0"
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-qtrd-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ai-qtrd-web
+        component: frontend
+    spec:
+      # Schedule on master node (cloud-ubuntu-1-16c32g)
+      nodeSelector:
+        kubernetes.io/hostname: cloud-ubuntu-1-16c32g
+
+      containers:
+        - name: web
+          image: docker.io/library/gushen-web:latest
+          imagePullPolicy: Never # Use local image
+          ports:
+            - containerPort: 3000
+              name: http
+
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            # API proxy configuration
+            - name: API_URL
+              value: "http://ai-qtrd-api:8000"
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+      restartPolicy: Always

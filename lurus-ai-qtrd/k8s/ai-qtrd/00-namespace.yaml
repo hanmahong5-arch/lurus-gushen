@@ -1,0 +1,9 @@
+# AI-QTRD Namespace
+# Kubernetes namespace for AI-QTRD quantitative trading platform
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-qtrd
+  labels:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: namespace

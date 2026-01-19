@@ -1,0 +1,124 @@
+# AI-QTRD Traefik IngressRoutes
+# HTTPS routing for gushen.lurus.cn
+---
+# Main web route (frontend)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ai-qtrd-web
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: ingress
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`gushen.lurus.cn`) && !PathPrefix(`/api`) && !PathPrefix(`/ws`) && !PathPrefix(`/docs`) && !PathPrefix(`/openapi.json`) && !Path(`/health`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+  tls:
+    secretName: gushen-lurus-cn-tls
+
+---
+# API route (backend) - Routes all backend API requests to the FastAPI service
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ai-qtrd-api
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: ingress
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # Health check endpoint
+    - match: Host(`gushen.lurus.cn`) && Path(`/health`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    # Backend API endpoints (strategy, trading, account, market, data, backtest)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/strategy`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/trading`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/account`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/data`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/backtest`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    # WebSocket endpoint
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/ws`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+    # Swagger docs
+    - match: Host(`gushen.lurus.cn`) && (PathPrefix(`/docs`) || PathPrefix(`/openapi.json`))
+      kind: Rule
+      services:
+        - name: ai-qtrd-api
+          port: 8000
+  tls:
+    secretName: gushen-lurus-cn-tls
+
+---
+# HTTP to HTTPS redirect
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ai-qtrd-redirect
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: ingress
+spec:
+  entryPoints:
+    - web
+  routes:
+    - match: Host(`gushen.lurus.cn`)
+      kind: Rule
+      middlewares:
+        - name: redirect-https
+          namespace: ai-qtrd
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+
+---
+# HTTPS redirect middleware
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: ai-qtrd
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true

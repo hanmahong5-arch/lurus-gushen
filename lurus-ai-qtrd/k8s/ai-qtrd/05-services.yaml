@@ -1,0 +1,44 @@
+# ============================================
+# AI-QTRD Services
+# Kubernetes services for internal and external access
+# ============================================
+---
+# API Service (ClusterIP for internal access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-qtrd-api
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: api
+
+---
+# Web Service (ClusterIP for internal access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-qtrd-web
+  namespace: ai-qtrd
+  labels:
+    app: ai-qtrd-web
+    component: frontend
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: ai-qtrd-web
