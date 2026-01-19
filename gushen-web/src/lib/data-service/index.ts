@@ -271,41 +271,73 @@ export function generateMockKLineData(
 
 /**
  * Generate mock indices for testing
- * 生成测试用模拟指数
+ * 生成测试用模拟指数（扩展版本，包含更多指数）
  */
 export function generateMockIndices(): IndexQuote[] {
-  return [
+  const baseData = [
     {
-      symbol: "000001",
+      symbol: "000001.SH",
       name: "上证指数",
-      price: 3100 + Math.random() * 200,
-      change: (Math.random() - 0.5) * 50,
-      changePercent: (Math.random() - 0.5) * 2,
-      volume: 300000000000,
-      amount: 400000000000,
-      timestamp: Date.now(),
+      basePrice: 3150,
+      volatility: 0.015,
     },
     {
-      symbol: "399001",
+      symbol: "399001.SZ",
       name: "深证成指",
-      price: 10000 + Math.random() * 500,
-      change: (Math.random() - 0.5) * 100,
-      changePercent: (Math.random() - 0.5) * 2,
-      volume: 400000000000,
-      amount: 500000000000,
-      timestamp: Date.now(),
+      basePrice: 10200,
+      volatility: 0.018,
     },
     {
-      symbol: "399006",
+      symbol: "399006.SZ",
       name: "创业板指",
-      price: 2000 + Math.random() * 200,
-      change: (Math.random() - 0.5) * 50,
-      changePercent: (Math.random() - 0.5) * 3,
-      volume: 100000000000,
-      amount: 150000000000,
-      timestamp: Date.now(),
+      basePrice: 2050,
+      volatility: 0.025,
+    },
+    {
+      symbol: "000300.SH",
+      name: "沪深300",
+      basePrice: 3700,
+      volatility: 0.016,
+    },
+    { symbol: "000016.SH", name: "上证50", basePrice: 2450, volatility: 0.014 },
+    { symbol: "000905.SH", name: "中证500", basePrice: 5200, volatility: 0.02 },
+    {
+      symbol: "399673.SZ",
+      name: "创业板50",
+      basePrice: 2100,
+      volatility: 0.028,
+    },
+    { symbol: "000688.SH", name: "科创50", basePrice: 980, volatility: 0.03 },
+    {
+      symbol: "399005.SZ",
+      name: "中小板指",
+      basePrice: 6800,
+      volatility: 0.022,
+    },
+    {
+      symbol: "000852.SH",
+      name: "中证1000",
+      basePrice: 6100,
+      volatility: 0.024,
     },
   ];
+
+  return baseData.map((item) => {
+    const change = (Math.random() - 0.5) * item.basePrice * item.volatility * 2;
+    const price = item.basePrice + change;
+    const changePercent = (change / item.basePrice) * 100;
+
+    return {
+      symbol: item.symbol,
+      name: item.name,
+      price: parseFloat(price.toFixed(2)),
+      change: parseFloat(change.toFixed(2)),
+      changePercent: parseFloat(changePercent.toFixed(2)),
+      volume: Math.floor(Math.random() * 500000000000 + 100000000000),
+      amount: Math.floor(Math.random() * 600000000000 + 150000000000),
+      timestamp: Date.now(),
+    };
+  });
 }
 
 // =============================================================================

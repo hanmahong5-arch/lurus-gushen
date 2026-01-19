@@ -3,13 +3,26 @@
 /**
  * Trading Dashboard Page with K-line Chart and Real-time Data
  * 交易面板页面，包含K线图表和实时数据
+ *
+ * Refactored to use data-driven KLineChart and SymbolSelector components.
+ * 重构使用数据驱动的K线图和交易对选择器组件
  */
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useMajorIndices, useNorthBoundFlow } from "@/hooks/use-market-data";
 import { DataStatusPanel } from "@/components/dashboard/data-status-panel";
+import {
+  SymbolSelector,
+  type SymbolInfo,
+} from "@/components/trading/symbol-selector";
+import {
+  getTradingStatusInfo,
+  formatTimeRemaining,
+  getTimeToNextEvent,
+  isMarketOpen,
+} from "@/lib/trading/time-utils";
 
 // Dynamically import chart to avoid SSR issues with canvas
 // 动态导入图表以避免 SSR 与 canvas 的兼容问题
@@ -25,10 +38,14 @@ const KLineChart = dynamic(
   },
 );
 
+// =============================================================================
+// TYPES / 类型定义
+// =============================================================================
+
 // Position type definition
-// 持仓类型定义
 interface Position {
   symbol: string;
+  name: string;
   side: "long" | "short";
   size: number;
   entryPrice: number;
@@ -38,10 +55,10 @@ interface Position {
 }
 
 // Order type definition
-// 订单类型定义
 interface Order {
   id: string;
   symbol: string;
+  name: string;
   side: "buy" | "sell";
   type: "limit" | "market" | "stop-loss";
   price: number;
@@ -51,79 +68,56 @@ interface Order {
   time: string;
 }
 
-// Initial mock position data
-// 初始模拟持仓数据
+// =============================================================================
+// MOCK DATA / 模拟数据
+// =============================================================================
+
+// Initial mock position data for A-shares
 const INITIAL_POSITIONS: Position[] = [
   {
-    symbol: "BTC/USDT",
+    symbol: "600519",
+    name: "贵州茅台",
     side: "long",
-    size: 0.5,
-    entryPrice: 43250.0,
-    currentPrice: 45120.0,
-    pnl: 935.0,
-    pnlPercent: 4.32,
+    size: 100,
+    entryPrice: 1720.0,
+    currentPrice: 1750.0,
+    pnl: 3000.0,
+    pnlPercent: 1.74,
   },
   {
-    symbol: "ETH/USDT",
+    symbol: "000333",
+    name: "美的集团",
     side: "long",
-    size: 5.0,
-    entryPrice: 2280.0,
-    currentPrice: 2350.0,
-    pnl: 350.0,
-    pnlPercent: 3.07,
-  },
-  {
-    symbol: "SOL/USDT",
-    side: "short",
-    size: 50,
-    entryPrice: 98.5,
-    currentPrice: 95.2,
-    pnl: 165.0,
-    pnlPercent: 3.35,
+    size: 500,
+    entryPrice: 55.0,
+    currentPrice: 56.8,
+    pnl: 900.0,
+    pnlPercent: 3.27,
   },
 ];
 
 // Initial mock order data
-// 初始模拟订单数据
 const INITIAL_ORDERS: Order[] = [
   {
     id: "ORD001",
-    symbol: "BTC/USDT",
+    symbol: "601318",
+    name: "中国平安",
     side: "buy",
     type: "limit",
-    price: 44000.0,
-    size: 0.2,
+    price: 47.5,
+    size: 200,
     filled: 0,
     status: "open",
-    time: "2026-01-17 10:30:00",
-  },
-  {
-    id: "ORD002",
-    symbol: "ETH/USDT",
-    side: "sell",
-    type: "stop-loss",
-    price: 2200.0,
-    size: 2.5,
-    filled: 0,
-    status: "open",
-    time: "2026-01-17 09:15:00",
+    time: "2026-01-19 10:30:00",
   },
 ];
 
-// Default symbol list (fallback when API is unavailable)
-// 默认交易对列表（API不可用时的备用）
-const DEFAULT_SYMBOLS = [
-  { symbol: "BTC/USDT", price: 45120.0, change: 2.35 },
-  { symbol: "ETH/USDT", price: 2350.0, change: 1.82 },
-  { symbol: "SOL/USDT", price: 95.2, change: -1.25 },
-  { symbol: "BNB/USDT", price: 312.5, change: 0.95 },
-  { symbol: "XRP/USDT", price: 0.582, change: -0.45 },
-  { symbol: "ADA/USDT", price: 0.485, change: 3.21 },
-];
+// =============================================================================
+// UTILITY FUNCTIONS / 工具函数
+// =============================================================================
 
 /**
- * Format large numbers to readable format
- * 格式化大数字为可读格式
+ * Format large numbers to readable format (万/亿)
  */
 function formatAmount(num: number): string {
   if (Math.abs(num) >= 100000000) return (num / 100000000).toFixed(2) + "亿";
@@ -131,8 +125,31 @@ function formatAmount(num: number): string {
   return num.toFixed(2);
 }
 
+/**
+ * Format price for display
+ */
+function formatPrice(price: number): string {
+  if (price >= 1000) return price.toFixed(2);
+  if (price >= 100) return price.toFixed(2);
+  if (price >= 10) return price.toFixed(3);
+  return price.toFixed(4);
+}
+
+// =============================================================================
+// COMPONENT / 组件
+// =============================================================================
+
 export default function TradingPage() {
-  const [selectedSymbol, setSelectedSymbol] = useState("BTC/USDT");
+  // Selected symbol state
+  const [selectedSymbol, setSelectedSymbol] = useState("600519");
+  const [selectedSymbolInfo, setSelectedSymbolInfo] =
+    useState<SymbolInfo | null>(null);
+
+  // Trading status state (updates every second)
+  const [tradingStatus, setTradingStatus] = useState(getTradingStatusInfo());
+  const [timeToNext, setTimeToNext] = useState(getTimeToNextEvent());
+
+  // Tab and order state
   const [activeTab, setActiveTab] = useState<"positions" | "orders" | "market">(
     "market",
   );
@@ -143,32 +160,35 @@ export default function TradingPage() {
   );
   const [orderPrice, setOrderPrice] = useState("");
   const [orderSize, setOrderSize] = useState("");
-  const [balance, setBalance] = useState(50000);
+  const [balance, setBalance] = useState(500000); // 50万模拟资金
   const [notification, setNotification] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
 
   // Fetch real-time market data
-  // 获取实时市场数据
   const {
     data: indices,
     loading: indicesLoading,
     error: indicesError,
   } = useMajorIndices({
-    refreshInterval: 10000,
+    refreshInterval: isMarketOpen() ? 10000 : 60000, // 交易时间10秒刷新，非交易时间60秒
   });
 
   const { data: northBound, loading: northBoundLoading } = useNorthBoundFlow({
     refreshInterval: 60000,
   });
 
-  // Use real indices if available, otherwise use defaults
-  // 如果可用则使用真实指数，否则使用默认值
-  const SYMBOLS = DEFAULT_SYMBOLS;
+  // Update trading status every second
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTradingStatus(getTradingStatusInfo());
+      setTimeToNext(getTimeToNextEvent());
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
 
   // Show notification helper
-  // 显示通知辅助函数
   const showNotification = useCallback(
     (type: "success" | "error", message: string) => {
       setNotification({ type, message });
@@ -178,39 +198,43 @@ export default function TradingPage() {
   );
 
   // Calculate total PnL
-  // 计算总盈亏
   const totalPnL = positions.reduce((sum, pos) => sum + pos.pnl, 0);
   const totalPositionValue = positions.reduce(
     (sum, pos) => sum + pos.currentPrice * pos.size,
     0,
   );
 
-  // Get current symbol price
-  // 获取当前交易对价格
-  const currentSymbolPrice =
-    SYMBOLS.find((s) => s.symbol === selectedSymbol)?.price || 0;
+  // Get current symbol price (from selected info or fallback)
+  const currentSymbolPrice = selectedSymbolInfo?.price || 0;
+
+  // Handle symbol change
+  const handleSymbolChange = useCallback(
+    (symbol: string, info?: SymbolInfo) => {
+      setSelectedSymbol(symbol);
+      if (info) {
+        setSelectedSymbolInfo(info);
+      }
+    },
+    [],
+  );
 
   // Close position handler
-  // 平仓处理函数
   const handleClosePosition = useCallback(
     (symbol: string) => {
       const position = positions.find((p) => p.symbol === symbol);
       if (!position) return;
 
-      setBalance(
-        (prev) => prev + position.currentPrice * position.size + position.pnl,
-      );
+      setBalance((prev) => prev + position.currentPrice * position.size);
       setPositions((prev) => prev.filter((p) => p.symbol !== symbol));
       showNotification(
         "success",
-        `已平仓 ${symbol}，盈亏: ${position.pnl >= 0 ? "+" : ""}$${position.pnl.toFixed(2)}`,
+        `已平仓 ${position.name}，盈亏: ${position.pnl >= 0 ? "+" : ""}¥${position.pnl.toFixed(2)}`,
       );
     },
     [positions, showNotification],
   );
 
   // Cancel order handler
-  // 撤单处理函数
   const handleCancelOrder = useCallback(
     (orderId: string) => {
       setOrders((prev) => prev.filter((o) => o.id !== orderId));
@@ -220,7 +244,6 @@ export default function TradingPage() {
   );
 
   // Place order handler
-  // 下单处理函数
   const handlePlaceOrder = useCallback(
     (side: "buy" | "sell") => {
       const price =
@@ -229,6 +252,12 @@ export default function TradingPage() {
 
       if (!size || size <= 0) {
         showNotification("error", "请输入有效的数量");
+        return;
+      }
+
+      // A股一手=100股
+      if (size % 100 !== 0) {
+        showNotification("error", "A股交易数量必须为100的整数倍（一手=100股）");
         return;
       }
 
@@ -243,11 +272,20 @@ export default function TradingPage() {
         return;
       }
 
+      // Check trading status
+      if (!tradingStatus.canTrade) {
+        showNotification("error", `当前${tradingStatus.label}，无法下单`);
+        return;
+      }
+
+      const symbolName = selectedSymbolInfo?.name || selectedSymbol;
+
       if (orderType === "market") {
         if (side === "buy") {
           setBalance((prev) => prev - orderValue);
           const newPosition: Position = {
             symbol: selectedSymbol,
+            name: symbolName,
             side: "long",
             size,
             entryPrice: price,
@@ -258,7 +296,7 @@ export default function TradingPage() {
           setPositions((prev) => [...prev, newPosition]);
           showNotification(
             "success",
-            `市价买入 ${size} ${selectedSymbol} @ $${price.toLocaleString()}`,
+            `市价买入 ${symbolName} ${size}股 @ ¥${price.toFixed(2)}`,
           );
         } else {
           const existingPosition = positions.find(
@@ -284,30 +322,17 @@ export default function TradingPage() {
             }
             showNotification(
               "success",
-              `市价卖出 ${size} ${selectedSymbol}，盈亏: ${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`,
+              `市价卖出 ${symbolName} ${size}股，盈亏: ${pnl >= 0 ? "+" : ""}¥${pnl.toFixed(2)}`,
             );
           } else {
-            setBalance((prev) => prev - orderValue);
-            const newPosition: Position = {
-              symbol: selectedSymbol,
-              side: "short",
-              size,
-              entryPrice: price,
-              currentPrice: price,
-              pnl: 0,
-              pnlPercent: 0,
-            };
-            setPositions((prev) => [...prev, newPosition]);
-            showNotification(
-              "success",
-              `开空 ${size} ${selectedSymbol} @ $${price.toLocaleString()}`,
-            );
+            showNotification("error", "持仓不足");
           }
         }
       } else {
         const newOrder: Order = {
           id: `ORD${Date.now().toString().slice(-6)}`,
           symbol: selectedSymbol,
+          name: symbolName,
           side,
           type: orderType,
           price,
@@ -331,23 +356,28 @@ export default function TradingPage() {
       orderPrice,
       orderSize,
       selectedSymbol,
+      selectedSymbolInfo,
       currentSymbolPrice,
       balance,
       positions,
+      tradingStatus,
       showNotification,
     ],
   );
 
-  // Set size percentage
-  // 设置数量百分比
+  // Set size percentage (按手数计算)
   const handleSetSizePercentage = useCallback(
     (percentage: number) => {
       const price =
         orderType === "market"
           ? currentSymbolPrice
           : parseFloat(orderPrice) || currentSymbolPrice;
-      const maxSize = balance / price;
-      setOrderSize(((maxSize * percentage) / 100).toFixed(4));
+      if (price <= 0) return;
+
+      const maxValue = balance * (percentage / 100);
+      const maxShares = Math.floor(maxValue / price);
+      const lots = Math.floor(maxShares / 100); // 一手=100股
+      setOrderSize((lots * 100).toString());
     },
     [balance, currentSymbolPrice, orderPrice, orderType],
   );
@@ -406,7 +436,34 @@ export default function TradingPage() {
             </nav>
 
             <div className="flex items-center gap-3">
-              <span className="text-sm text-white/50">演示账户</span>
+              {/* Trading status indicator */}
+              <div
+                className={`flex items-center gap-2 px-3 py-1 rounded-lg ${
+                  tradingStatus.color === "green"
+                    ? "bg-profit/10 text-profit"
+                    : tradingStatus.color === "yellow"
+                      ? "bg-yellow-500/10 text-yellow-400"
+                      : "bg-white/5 text-white/50"
+                }`}
+              >
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    tradingStatus.color === "green"
+                      ? "bg-profit animate-pulse"
+                      : tradingStatus.color === "yellow"
+                        ? "bg-yellow-400"
+                        : "bg-white/30"
+                  }`}
+                />
+                <span className="text-sm">{tradingStatus.label}</span>
+                {timeToNext > 0 && timeToNext < 3600000 && (
+                  <span className="text-xs opacity-70">
+                    ({formatTimeRemaining(timeToNext)})
+                  </span>
+                )}
+              </div>
+
+              <span className="text-sm text-white/50">模拟交易</span>
               <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
                 <span className="text-accent text-sm">D</span>
               </div>
@@ -490,47 +547,61 @@ export default function TradingPage() {
         </div>
 
         <div className="grid grid-cols-12 gap-4">
-          {/* Left sidebar - Symbol list */}
+          {/* Left sidebar - Symbol selector */}
           <div className="col-span-2">
             <div className="bg-surface rounded-xl border border-border p-3">
               <h3 className="text-sm font-medium text-white mb-3">
-                交易对 / Symbols
+                选择股票 / Symbol
               </h3>
-              <div className="space-y-1">
-                {SYMBOLS.map((item) => (
-                  <button
-                    key={item.symbol}
-                    onClick={() => setSelectedSymbol(item.symbol)}
-                    className={`w-full flex items-center justify-between p-2 rounded-lg transition ${
-                      selectedSymbol === item.symbol
-                        ? "bg-accent/10 border border-accent/30"
-                        : "hover:bg-white/5"
-                    }`}
-                  >
-                    <span
-                      className={`text-sm font-medium ${
-                        selectedSymbol === item.symbol
-                          ? "text-accent"
-                          : "text-white"
+              <SymbolSelector
+                value={selectedSymbol}
+                onChange={handleSymbolChange}
+                showQuote={true}
+              />
+
+              {/* Selected symbol info */}
+              {selectedSymbolInfo && (
+                <div className="mt-4 pt-4 border-t border-border">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white">
+                      ¥{selectedSymbolInfo.price?.toFixed(2) || "-"}
+                    </div>
+                    <div
+                      className={`text-sm ${
+                        (selectedSymbolInfo.changePercent || 0) >= 0
+                          ? "text-profit"
+                          : "text-loss"
                       }`}
                     >
-                      {item.symbol}
-                    </span>
-                    <div className="text-right">
-                      <div className="text-xs text-white/70">
-                        {item.price.toLocaleString()}
-                      </div>
-                      <div
-                        className={`text-xs ${
-                          item.change >= 0 ? "text-profit" : "text-loss"
-                        }`}
-                      >
-                        {item.change >= 0 ? "+" : ""}
-                        {item.change}%
-                      </div>
+                      {(selectedSymbolInfo.changePercent || 0) >= 0 ? "+" : ""}
+                      {selectedSymbolInfo.changePercent?.toFixed(2)}%
                     </div>
-                  </button>
-                ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Quick access - recent/favorite stocks */}
+              <div className="mt-4 pt-4 border-t border-border">
+                <div className="text-xs text-white/50 mb-2">快捷访问</div>
+                <div className="space-y-1">
+                  {[
+                    { symbol: "000001", name: "上证指数", type: "index" },
+                    { symbol: "399001", name: "深证成指", type: "index" },
+                    { symbol: "399006", name: "创业板指", type: "index" },
+                  ].map((item) => (
+                    <button
+                      key={item.symbol}
+                      onClick={() => handleSymbolChange(item.symbol)}
+                      className={`w-full text-left px-2 py-1.5 rounded text-xs transition ${
+                        selectedSymbol === item.symbol
+                          ? "bg-accent/10 text-accent"
+                          : "text-white/60 hover:bg-white/5 hover:text-white"
+                      }`}
+                    >
+                      {item.name}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -543,6 +614,7 @@ export default function TradingPage() {
               showVolume={true}
               showMA={true}
               maWindows={[5, 20, 60]}
+              onSymbolChange={handleSymbolChange}
             />
           </div>
 
@@ -552,6 +624,15 @@ export default function TradingPage() {
               <h3 className="text-sm font-medium text-white mb-4">
                 下单 / Place Order
               </h3>
+
+              {/* Trading status warning */}
+              {!tradingStatus.canTrade && (
+                <div className="mb-4 p-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg">
+                  <div className="text-xs text-yellow-400">
+                    当前{tradingStatus.label}，订单将在下个交易时段处理
+                  </div>
+                </div>
+              )}
 
               {/* Order type tabs */}
               <div className="flex gap-2 mb-4">
@@ -596,7 +677,7 @@ export default function TradingPage() {
                   type="number"
                   placeholder={
                     orderType === "market"
-                      ? currentSymbolPrice.toLocaleString()
+                      ? formatPrice(currentSymbolPrice)
                       : "0.00"
                   }
                   value={orderType === "market" ? "" : orderPrice}
@@ -613,11 +694,13 @@ export default function TradingPage() {
               {/* Size input */}
               <div className="mb-3">
                 <label className="block text-xs text-white/50 mb-1">
-                  数量 / Size
+                  数量 / Size（股，100的整数倍）
                 </label>
                 <input
                   type="number"
-                  placeholder="0.00"
+                  placeholder="100"
+                  step="100"
+                  min="100"
                   value={orderSize}
                   onChange={(e) => setOrderSize(e.target.value)}
                   className="w-full bg-background border border-border rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-accent"
@@ -637,17 +720,45 @@ export default function TradingPage() {
                 ))}
               </div>
 
+              {/* Order summary */}
+              {orderSize && (orderType === "market" || orderPrice) && (
+                <div className="mb-4 p-2 bg-background rounded-lg">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-white/50">预估金额</span>
+                    <span className="text-white">
+                      ¥
+                      {(
+                        parseFloat(orderSize) *
+                        (orderType === "market"
+                          ? currentSymbolPrice
+                          : parseFloat(orderPrice) || 0)
+                      ).toLocaleString()}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               {/* Buy/Sell buttons */}
               <div className="flex gap-2">
                 <button
                   onClick={() => handlePlaceOrder("buy")}
-                  className="flex-1 py-3 bg-profit hover:bg-profit/80 text-white font-medium rounded-lg transition"
+                  disabled={!tradingStatus.canTrade}
+                  className={`flex-1 py-3 font-medium rounded-lg transition ${
+                    tradingStatus.canTrade
+                      ? "bg-profit hover:bg-profit/80 text-white"
+                      : "bg-profit/30 text-white/50 cursor-not-allowed"
+                  }`}
                 >
                   买入 / Buy
                 </button>
                 <button
                   onClick={() => handlePlaceOrder("sell")}
-                  className="flex-1 py-3 bg-loss hover:bg-loss/80 text-white font-medium rounded-lg transition"
+                  disabled={!tradingStatus.canTrade}
+                  className={`flex-1 py-3 font-medium rounded-lg transition ${
+                    tradingStatus.canTrade
+                      ? "bg-loss hover:bg-loss/80 text-white"
+                      : "bg-loss/30 text-white/50 cursor-not-allowed"
+                  }`}
                 >
                   卖出 / Sell
                 </button>
@@ -658,19 +769,19 @@ export default function TradingPage() {
                 <div className="flex justify-between text-xs mb-2">
                   <span className="text-white/50">可用余额</span>
                   <span className="text-white">
-                    ${balance.toLocaleString()}
+                    ¥{balance.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs mb-2">
                   <span className="text-white/50">持仓市值</span>
                   <span className="text-white">
-                    ${totalPositionValue.toLocaleString()}
+                    ¥{totalPositionValue.toLocaleString()}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
                   <span className="text-white/50">总盈亏</span>
                   <span className={totalPnL >= 0 ? "text-profit" : "text-loss"}>
-                    {totalPnL >= 0 ? "+" : ""}${totalPnL.toFixed(2)}
+                    {totalPnL >= 0 ? "+" : ""}¥{totalPnL.toFixed(2)}
                   </span>
                 </div>
               </div>
@@ -748,7 +859,8 @@ export default function TradingPage() {
                         indices.map((idx) => (
                           <tr
                             key={idx.symbol}
-                            className="text-sm border-b border-border/50 hover:bg-white/5"
+                            className="text-sm border-b border-border/50 hover:bg-white/5 cursor-pointer"
+                            onClick={() => handleSymbolChange(idx.symbol)}
                           >
                             <td className="px-4 py-3 text-white font-medium">
                               {idx.name}
@@ -799,7 +911,7 @@ export default function TradingPage() {
                     <thead>
                       <tr className="text-xs text-white/50 border-b border-border">
                         <th className="text-left px-4 py-3 font-medium">
-                          交易对
+                          股票
                         </th>
                         <th className="text-left px-4 py-3 font-medium">
                           方向
@@ -808,10 +920,13 @@ export default function TradingPage() {
                           数量
                         </th>
                         <th className="text-right px-4 py-3 font-medium">
-                          开仓价
+                          成本价
                         </th>
                         <th className="text-right px-4 py-3 font-medium">
                           现价
+                        </th>
+                        <th className="text-right px-4 py-3 font-medium">
+                          市值
                         </th>
                         <th className="text-right px-4 py-3 font-medium">
                           盈亏
@@ -822,53 +937,80 @@ export default function TradingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {positions.map((pos, index) => (
-                        <tr
-                          key={index}
-                          className="text-sm border-b border-border/50 hover:bg-white/5"
-                        >
-                          <td className="px-4 py-3 text-white font-medium">
-                            {pos.symbol}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`px-2 py-0.5 rounded text-xs ${
-                                pos.side === "long"
-                                  ? "bg-profit/20 text-profit"
-                                  : "bg-loss/20 text-loss"
+                      {positions.length > 0 ? (
+                        positions.map((pos, index) => (
+                          <tr
+                            key={index}
+                            className="text-sm border-b border-border/50 hover:bg-white/5"
+                          >
+                            <td className="px-4 py-3">
+                              <div className="text-white font-medium">
+                                {pos.name}
+                              </div>
+                              <div className="text-xs text-white/40">
+                                {pos.symbol}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs ${
+                                  pos.side === "long"
+                                    ? "bg-profit/20 text-profit"
+                                    : "bg-loss/20 text-loss"
+                                }`}
+                              >
+                                {pos.side === "long" ? "多" : "空"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right text-white">
+                              {pos.size}股
+                            </td>
+                            <td className="px-4 py-3 text-right text-white/70">
+                              ¥{pos.entryPrice.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 text-right text-white">
+                              ¥{pos.currentPrice.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 text-right text-white">
+                              ¥{(pos.currentPrice * pos.size).toLocaleString()}
+                            </td>
+                            <td
+                              className={`px-4 py-3 text-right font-medium ${
+                                pos.pnl >= 0 ? "text-profit" : "text-loss"
                               }`}
                             >
-                              {pos.side === "long" ? "多" : "空"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right text-white">
-                            {pos.size}
-                          </td>
-                          <td className="px-4 py-3 text-right text-white/70">
-                            {pos.entryPrice.toLocaleString()}
-                          </td>
-                          <td className="px-4 py-3 text-right text-white">
-                            {pos.currentPrice.toLocaleString()}
-                          </td>
+                              {pos.pnl >= 0 ? "+" : ""}¥{pos.pnl.toFixed(2)}
+                              <br />
+                              <span className="text-xs">
+                                ({pos.pnlPercent >= 0 ? "+" : ""}
+                                {pos.pnlPercent.toFixed(2)}%)
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => handleClosePosition(pos.symbol)}
+                                disabled={!tradingStatus.canTrade}
+                                className={`px-3 py-1 text-xs border rounded transition ${
+                                  tradingStatus.canTrade
+                                    ? "text-loss border-loss/30 hover:bg-loss/10"
+                                    : "text-white/30 border-white/10 cursor-not-allowed"
+                                }`}
+                              >
+                                平仓
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
                           <td
-                            className={`px-4 py-3 text-right font-medium ${
-                              pos.pnl >= 0 ? "text-profit" : "text-loss"
-                            }`}
+                            colSpan={8}
+                            className="px-4 py-8 text-center text-white/50"
                           >
-                            {pos.pnl >= 0 ? "+" : ""}${pos.pnl.toFixed(2)} (
-                            {pos.pnlPercent >= 0 ? "+" : ""}
-                            {pos.pnlPercent}%)
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleClosePosition(pos.symbol)}
-                              className="px-3 py-1 text-xs text-loss border border-loss/30 rounded hover:bg-loss/10 transition"
-                            >
-                              平仓
-                            </button>
+                            暂无持仓
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 ) : (
@@ -879,7 +1021,7 @@ export default function TradingPage() {
                           订单号
                         </th>
                         <th className="text-left px-4 py-3 font-medium">
-                          交易对
+                          股票
                         </th>
                         <th className="text-left px-4 py-3 font-medium">
                           方向
@@ -902,50 +1044,70 @@ export default function TradingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {orders.map((order) => (
-                        <tr
-                          key={order.id}
-                          className="text-sm border-b border-border/50 hover:bg-white/5"
-                        >
-                          <td className="px-4 py-3 text-white/50 font-mono text-xs">
-                            {order.id}
-                          </td>
-                          <td className="px-4 py-3 text-white font-medium">
-                            {order.symbol}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className={`px-2 py-0.5 rounded text-xs ${
-                                order.side === "buy"
-                                  ? "bg-profit/20 text-profit"
-                                  : "bg-loss/20 text-loss"
-                              }`}
-                            >
-                              {order.side === "buy" ? "买入" : "卖出"}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-white/70 text-xs uppercase">
-                            {order.type}
-                          </td>
-                          <td className="px-4 py-3 text-right text-white">
-                            {order.price.toLocaleString()}
-                          </td>
-                          <td className="px-4 py-3 text-right text-white">
-                            {order.size}
-                          </td>
-                          <td className="px-4 py-3 text-right text-white/50 text-xs">
-                            {order.time}
-                          </td>
-                          <td className="px-4 py-3 text-right">
-                            <button
-                              onClick={() => handleCancelOrder(order.id)}
-                              className="px-3 py-1 text-xs text-loss border border-loss/30 rounded hover:bg-loss/10 transition"
-                            >
-                              撤单
-                            </button>
+                      {orders.length > 0 ? (
+                        orders.map((order) => (
+                          <tr
+                            key={order.id}
+                            className="text-sm border-b border-border/50 hover:bg-white/5"
+                          >
+                            <td className="px-4 py-3 text-white/50 font-mono text-xs">
+                              {order.id}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="text-white font-medium">
+                                {order.name}
+                              </div>
+                              <div className="text-xs text-white/40">
+                                {order.symbol}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">
+                              <span
+                                className={`px-2 py-0.5 rounded text-xs ${
+                                  order.side === "buy"
+                                    ? "bg-profit/20 text-profit"
+                                    : "bg-loss/20 text-loss"
+                                }`}
+                              >
+                                {order.side === "buy" ? "买入" : "卖出"}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-white/70 text-xs">
+                              {order.type === "limit"
+                                ? "限价"
+                                : order.type === "market"
+                                  ? "市价"
+                                  : "止损"}
+                            </td>
+                            <td className="px-4 py-3 text-right text-white">
+                              ¥{order.price.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3 text-right text-white">
+                              {order.size}股
+                            </td>
+                            <td className="px-4 py-3 text-right text-white/50 text-xs">
+                              {order.time}
+                            </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={() => handleCancelOrder(order.id)}
+                                className="px-3 py-1 text-xs text-loss border border-loss/30 rounded hover:bg-loss/10 transition"
+                              >
+                                撤单
+                              </button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td
+                            colSpan={8}
+                            className="px-4 py-8 text-center text-white/50"
+                          >
+                            暂无挂单
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 )}

@@ -1,15 +1,21 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Link from "next/link";
 import { StrategyInput } from "@/components/strategy-editor/strategy-input";
 import { CodePreview } from "@/components/strategy-editor/code-preview";
 import { BacktestPanel } from "@/components/strategy-editor/backtest-panel";
+import { StrategyTemplateList } from "@/components/strategy-editor/strategy-templates";
 
 export default function DashboardPage() {
   const [generatedCode, setGeneratedCode] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [strategyInputValue, setStrategyInputValue] = useState("");
+
+  // Ref to StrategyInput for focusing after template selection
+  // 用于模板选择后聚焦到输入框
+  const strategyInputRef = useRef<HTMLDivElement>(null);
 
   const handleGenerate = useCallback(async (prompt: string) => {
     setIsGenerating(true);
@@ -59,6 +65,18 @@ export default function DashboardPage() {
     } finally {
       setIsGenerating(false);
     }
+  }, []);
+
+  // Handle template selection - fill into input
+  // 处理模板选择 - 填充到输入框
+  const handleSelectTemplate = useCallback((prompt: string) => {
+    setStrategyInputValue(prompt);
+    // Scroll to input area
+    // 滚动到输入区域
+    strategyInputRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "center",
+    });
   }, []);
 
   return (
@@ -140,10 +158,12 @@ export default function DashboardPage() {
         {/* Editor grid */}
         <div className="grid lg:grid-cols-2 gap-6">
           {/* Left column - Input and results */}
-          <div className="space-y-6">
+          <div className="space-y-6" ref={strategyInputRef}>
             <StrategyInput
               onGenerate={handleGenerate}
               isLoading={isGenerating}
+              value={strategyInputValue}
+              onChange={setStrategyInputValue}
             />
             <BacktestPanel strategyCode={generatedCode} />
           </div>
@@ -154,20 +174,49 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Tips */}
+        {/* Strategy Templates Section / 策略模板区域 */}
+        <div className="mt-8 p-6 bg-surface border border-border rounded-xl">
+          <StrategyTemplateList onSelectTemplate={handleSelectTemplate} />
+        </div>
+
+        {/* Tips / 使用提示 */}
         <div className="mt-8 p-4 bg-accent/5 border border-accent/20 rounded-xl">
-          <h3 className="text-sm font-medium text-accent mb-2">
-            💡 提示 / Tips
+          <h3 className="text-sm font-medium text-accent mb-3">
+            💡 使用指南 / Usage Guide
           </h3>
-          <ul className="text-sm text-white/60 space-y-1">
-            <li>• 尝试描述具体的技术指标，如 "5日均线"、"RSI"、"MACD" 等</li>
-            <li>• 可以包含买入卖出条件、止盈止损比例等参数</li>
-            <li>• 生成的代码基于 VeighNa 框架，可直接用于实盘交易</li>
-            <li>
-              • Try describing specific indicators like "5-day MA", "RSI",
-              "MACD"
-            </li>
-          </ul>
+          <div className="grid md:grid-cols-2 gap-4 text-sm text-white/60">
+            <div className="space-y-2">
+              <h4 className="text-white/80 font-medium">📝 描述策略</h4>
+              <ul className="space-y-1 pl-4">
+                <li>• 使用具体的技术指标名称：均线、RSI、MACD、布林带等</li>
+                <li>• 明确买入/卖出条件和触发时机</li>
+                <li>• 指定参数范围：周期、阈值、止损比例</li>
+                <li>• 可以组合多个指标形成复合条件</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-white/80 font-medium">⚙️ 生成与回测</h4>
+              <ul className="space-y-1 pl-4">
+                <li>• 生成代码基于 VeighNa 框架，可直接实盘</li>
+                <li>• 回测使用历史数据验证策略效果</li>
+                <li>• 关注夏普比率、最大回撤等风险指标</li>
+                <li>• 实盘前建议多周期、多品种测试</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        {/* Risk Disclaimer / 风险提示 */}
+        <div className="mt-4 p-4 bg-loss/5 border border-loss/20 rounded-xl">
+          <h3 className="text-sm font-medium text-loss mb-2">
+            ⚠️ 风险提示 / Risk Disclaimer
+          </h3>
+          <p className="text-xs text-white/50 leading-relaxed">
+            本工具生成的策略代码仅供学习研究使用，不构成任何投资建议。量化交易存在市场风险，
+            历史回测结果不代表未来收益。请在充分了解相关风险的前提下，谨慎决策。
+            The strategies generated are for educational purposes only. Past
+            performance does not guarantee future results.
+          </p>
         </div>
 
         {/* Powered by */}

@@ -26,7 +26,7 @@ import type {
 
 interface UseMarketDataOptions {
   refreshInterval?: number; // Auto refresh interval in ms / 自动刷新间隔（毫秒）
-  enabled?: boolean;        // Whether to enable fetching / 是否启用获取
+  enabled?: boolean; // Whether to enable fetching / 是否启用获取
 }
 
 interface UseMarketDataResult<T> {
@@ -75,7 +75,7 @@ async function fetchApi<T>(endpoint: string): Promise<{
  */
 export function useStockQuote(
   symbol: string | null,
-  options: UseMarketDataOptions = {}
+  options: UseMarketDataOptions = {},
 ): UseMarketDataResult<StockQuote> {
   const { refreshInterval = 0, enabled = true } = options;
   const [data, setData] = useState<StockQuote | null>(null);
@@ -92,7 +92,9 @@ export function useStockQuote(
     setLoading(true);
     setError(null);
 
-    const result = await fetchApi<StockQuote>(`/api/market/quote?symbol=${symbol}`);
+    const result = await fetchApi<StockQuote>(
+      `/api/market/quote?symbol=${symbol}`,
+    );
 
     if (result.success && result.data) {
       setData(result.data);
@@ -141,7 +143,7 @@ export function useKLineData(
   symbol: string | null,
   timeframe: KLineTimeFrame = "1d",
   limit: number = 200,
-  options: UseMarketDataOptions = {}
+  options: UseMarketDataOptions = {},
 ): UseMarketDataResult<KLineData[]> {
   const { refreshInterval = 0, enabled = true } = options;
   const [data, setData] = useState<KLineData[] | null>(null);
@@ -159,7 +161,7 @@ export function useKLineData(
     setError(null);
 
     const result = await fetchApi<KLineData[]>(
-      `/api/market/kline?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`
+      `/api/market/kline?symbol=${symbol}&timeframe=${timeframe}&limit=${limit}`,
     );
 
     if (result.success && result.data) {
@@ -200,19 +202,58 @@ export function useKLineData(
 }
 
 /**
+ * Generate enhanced fallback indices data
+ * 生成增强的 fallback 指数数据
+ */
+function getEnhancedFallbackIndices(): IndexQuote[] {
+  const baseData = [
+    { symbol: "000001.SH", name: "上证指数", basePrice: 3150 },
+    { symbol: "399001.SZ", name: "深证成指", basePrice: 10200 },
+    { symbol: "399006.SZ", name: "创业板指", basePrice: 2050 },
+    { symbol: "000300.SH", name: "沪深300", basePrice: 3700 },
+    { symbol: "000016.SH", name: "上证50", basePrice: 2450 },
+    { symbol: "000905.SH", name: "中证500", basePrice: 5200 },
+    { symbol: "399673.SZ", name: "创业板50", basePrice: 2100 },
+    { symbol: "000688.SH", name: "科创50", basePrice: 980 },
+  ];
+
+  return baseData.map((item) => {
+    const change = (Math.random() - 0.5) * item.basePrice * 0.03;
+    const price = item.basePrice + change;
+
+    return {
+      symbol: item.symbol,
+      name: item.name,
+      price: parseFloat(price.toFixed(2)),
+      change: parseFloat(change.toFixed(2)),
+      changePercent: parseFloat(((change / item.basePrice) * 100).toFixed(2)),
+      volume: Math.floor(Math.random() * 500000000000),
+      amount: Math.floor(Math.random() * 600000000000),
+      timestamp: Date.now(),
+    };
+  });
+}
+
+/**
  * Hook for fetching major indices
  * 获取主要指数的 Hook
+ *
+ * Enhanced with:
+ * - Fallback data when API fails
+ * - Source indicator (api/fallback)
+ * - Better error handling
  */
 export function useMajorIndices(
-  options: UseMarketDataOptions = {}
-): UseMarketDataResult<IndexQuote[]> {
+  options: UseMarketDataOptions = {},
+): UseMarketDataResult<IndexQuote[]> & { isFallback: boolean } {
   const { refreshInterval = 10000, enabled = true } = options;
   const [data, setData] = useState<IndexQuote[] | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
   const [source, setSource] = useState<string | null>(null);
   const [cached, setCached] = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchData = useCallback(async () => {
@@ -221,18 +262,48 @@ export function useMajorIndices(
     setLoading(true);
     setError(null);
 
-    const result = await fetchApi<IndexQuote[]>("/api/market/indices");
+    try {
+      const result = await fetchApi<IndexQuote[]>("/api/market/indices");
 
-    if (result.success && result.data) {
-      setData(result.data);
-      setSource(result.source ?? null);
-      setCached(result.cached ?? false);
+      if (
+        result.success &&
+        result.data &&
+        Array.isArray(result.data) &&
+        result.data.length > 0
+      ) {
+        console.log(
+          `[useMajorIndices] Got ${result.data.length} indices from API`,
+        );
+        setData(result.data);
+        setSource(result.source ?? "api");
+        setCached(result.cached ?? false);
+        setLastUpdate(Date.now());
+        setIsFallback(false);
+      } else {
+        // API returned empty or failed, use fallback
+        console.warn(
+          "[useMajorIndices] API returned empty data, using fallback",
+        );
+        const fallbackData = getEnhancedFallbackIndices();
+        setData(fallbackData);
+        setSource("fallback");
+        setCached(false);
+        setLastUpdate(Date.now());
+        setIsFallback(true);
+        setError(null); // Clear error since we have fallback data
+      }
+    } catch (err) {
+      console.error("[useMajorIndices] Fetch error:", err);
+      // On error, provide fallback data
+      const fallbackData = getEnhancedFallbackIndices();
+      setData(fallbackData);
+      setSource("fallback");
+      setIsFallback(true);
       setLastUpdate(Date.now());
-    } else {
-      setError(result.error ?? "Failed to fetch indices");
+      setError(err instanceof Error ? err.message : "Failed to fetch indices");
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   }, [enabled]);
 
   useEffect(() => {
@@ -257,6 +328,7 @@ export function useMajorIndices(
     lastUpdate,
     source,
     cached,
+    isFallback,
   };
 }
 
@@ -266,7 +338,7 @@ export function useMajorIndices(
  */
 export function useCapitalFlow(
   symbol: string | null,
-  options: UseMarketDataOptions = {}
+  options: UseMarketDataOptions = {},
 ): UseMarketDataResult<CapitalFlow> {
   const { refreshInterval = 30000, enabled = true } = options;
   const [data, setData] = useState<CapitalFlow | null>(null);
@@ -283,7 +355,9 @@ export function useCapitalFlow(
     setLoading(true);
     setError(null);
 
-    const result = await fetchApi<CapitalFlow>(`/api/market/flow?symbol=${symbol}`);
+    const result = await fetchApi<CapitalFlow>(
+      `/api/market/flow?symbol=${symbol}`,
+    );
 
     if (result.success && result.data) {
       setData(result.data);
@@ -327,7 +401,7 @@ export function useCapitalFlow(
  * 获取北向资金的 Hook
  */
 export function useNorthBoundFlow(
-  options: UseMarketDataOptions = {}
+  options: UseMarketDataOptions = {},
 ): UseMarketDataResult<NorthBoundFlow> {
   const { refreshInterval = 60000, enabled = true } = options;
   const [data, setData] = useState<NorthBoundFlow | null>(null);
@@ -344,7 +418,9 @@ export function useNorthBoundFlow(
     setLoading(true);
     setError(null);
 
-    const result = await fetchApi<NorthBoundFlow>("/api/market/flow?type=northbound");
+    const result = await fetchApi<NorthBoundFlow>(
+      "/api/market/flow?type=northbound",
+    );
 
     if (result.success && result.data) {
       setData(result.data);
@@ -388,10 +464,13 @@ export function useNorthBoundFlow(
  * 获取服务状态的 Hook
  */
 export function useServiceStatus(
-  options: UseMarketDataOptions = {}
+  options: UseMarketDataOptions = {},
 ): UseMarketDataResult<{ stats: ServiceStats; health: ServiceHealth[] }> {
   const { refreshInterval = 30000, enabled = true } = options;
-  const [data, setData] = useState<{ stats: ServiceStats; health: ServiceHealth[] } | null>(null);
+  const [data, setData] = useState<{
+    stats: ServiceStats;
+    health: ServiceHealth[];
+  } | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdate, setLastUpdate] = useState<number | null>(null);
@@ -403,9 +482,10 @@ export function useServiceStatus(
     setLoading(true);
     setError(null);
 
-    const result = await fetchApi<{ stats: ServiceStats; health: ServiceHealth[] }>(
-      "/api/market/status"
-    );
+    const result = await fetchApi<{
+      stats: ServiceStats;
+      health: ServiceHealth[];
+    }>("/api/market/status");
 
     if (result.success && result.data) {
       setData(result.data);
@@ -448,7 +528,7 @@ export function useServiceStatus(
  */
 export function useBatchQuotes(
   symbols: string[],
-  options: UseMarketDataOptions = {}
+  options: UseMarketDataOptions = {},
 ): UseMarketDataResult<Record<string, StockQuote>> {
   const { refreshInterval = 5000, enabled = true } = options;
   const [data, setData] = useState<Record<string, StockQuote> | null>(null);
@@ -470,7 +550,7 @@ export function useBatchQuotes(
     setError(null);
 
     const result = await fetchApi<Record<string, StockQuote>>(
-      `/api/market/quote?symbols=${symbolsKey}`
+      `/api/market/quote?symbols=${symbolsKey}`,
     );
 
     if (result.success && result.data) {
@@ -478,7 +558,10 @@ export function useBatchQuotes(
       // 从嵌套响应中提取行情
       const quotes: Record<string, StockQuote> = {};
       for (const [sym, resp] of Object.entries(result.data)) {
-        const respData = resp as unknown as { success: boolean; data: StockQuote };
+        const respData = resp as unknown as {
+          success: boolean;
+          data: StockQuote;
+        };
         if (respData.success && respData.data) {
           quotes[sym] = respData.data;
         }

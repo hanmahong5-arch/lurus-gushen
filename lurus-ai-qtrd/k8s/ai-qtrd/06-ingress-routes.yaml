@@ -23,7 +23,7 @@ spec:
     secretName: gushen-lurus-cn-tls
 
 ---
-# Frontend API routes - Next.js API routes that need LLM access
+# Frontend API routes - Next.js API routes that need LLM access or data-service
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
 metadata:
@@ -56,6 +56,32 @@ spec:
           port: 3000
     # Backtest API (frontend JS engine)
     - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/backtest`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    # Market data APIs (frontend data-service with EastMoney/Sina sources)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market/status`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market/indices`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market/quote`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market/kline`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market/flow`)
       kind: Rule
       services:
         - name: ai-qtrd-web
@@ -99,7 +125,8 @@ spec:
       services:
         - name: ai-qtrd-api
           port: 8000
-    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market`)
+    # Backend market API (exclude frontend routes: status, indices, quote, kline, flow)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/market`) && !PathPrefix(`/api/market/status`) && !PathPrefix(`/api/market/indices`) && !PathPrefix(`/api/market/quote`) && !PathPrefix(`/api/market/kline`) && !PathPrefix(`/api/market/flow`)
       kind: Rule
       services:
         - name: ai-qtrd-api

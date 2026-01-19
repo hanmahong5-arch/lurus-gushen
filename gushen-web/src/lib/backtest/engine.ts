@@ -5,116 +5,51 @@
  * A lightweight backtest engine that simulates trading strategies
  * based on generated strategy code and historical K-line data.
  *
+ * Features:
+ * - Lot size rules for A-shares (100股/手)
+ * - Detailed trade records with execution info
+ * - Daily logs for full transparency
+ * - Commission and slippage simulation
+ *
  * @module lib/backtest/engine
  */
 
-// =============================================================================
-// TYPES / 类型定义
-// =============================================================================
+import {
+  roundToLot,
+  calculateMaxAffordableLots,
+  getLotSizeConfig,
+  detectAssetType,
+  formatQuantityWithUnit,
+  type LotCalculation,
+} from "./lot-size";
 
-/**
- * K-line data point for backtesting
- */
-export interface BacktestKline {
-  time: number; // Unix timestamp (seconds)
-  open: number;
-  high: number;
-  low: number;
-  close: number;
-  volume: number;
-}
+import type {
+  BacktestKline,
+  BacktestConfig,
+  BacktestResult,
+  BacktestTrade,
+  ParsedStrategy,
+  EquityPoint,
+  StrategySignal,
+  DetailedTrade,
+  BacktestDailyLog,
+  EnhancedBacktestResult,
+  BacktestSummary,
+} from "./types";
 
-/**
- * Trade record during backtest
- */
-export interface BacktestTrade {
-  id: string;
-  type: "buy" | "sell";
-  price: number;
-  size: number;
-  timestamp: number;
-  reason: string;
-  pnl?: number;
-  pnlPercent?: number;
-}
-
-/**
- * Daily equity snapshot
- */
-export interface EquityPoint {
-  date: string;
-  equity: number;
-  drawdown: number;
-  position: number;
-}
-
-/**
- * Backtest configuration
- */
-export interface BacktestConfig {
-  symbol: string;
-  initialCapital: number;
-  commission: number; // Commission rate (e.g., 0.0003 = 0.03%)
-  slippage: number; // Slippage rate (e.g., 0.001 = 0.1%)
-  startDate: string; // ISO date string
-  endDate: string; // ISO date string
-  timeframe: "1d" | "1w" | "60m" | "30m" | "15m" | "5m" | "1m";
-}
-
-/**
- * Strategy signal
- */
-export interface StrategySignal {
-  action: "buy" | "sell" | "hold";
-  size?: number; // Position size (default: all-in)
-  stopLoss?: number; // Stop loss price
-  takeProfit?: number; // Take profit price
-  reason?: string; // Signal reason
-}
-
-/**
- * Parsed strategy from generated code
- */
-export interface ParsedStrategy {
-  name: string;
-  params: Record<string, number>;
-  indicators: string[];
-  entryCondition: string;
-  exitCondition: string;
-}
-
-/**
- * Backtest result
- */
-export interface BacktestResult {
-  // Summary metrics
-  totalReturn: number;
-  annualizedReturn: number;
-  maxDrawdown: number;
-  sharpeRatio: number;
-  sortinoRatio: number;
-  winRate: number;
-  totalTrades: number;
-
-  // Detailed metrics
-  profitFactor: number;
-  avgWin: number;
-  avgLoss: number;
-  maxConsecutiveWins: number;
-  maxConsecutiveLosses: number;
-  avgHoldingPeriod: number;
-  maxSingleWin: number;
-  maxSingleLoss: number;
-
-  // Time series data
-  equityCurve: EquityPoint[];
-  trades: BacktestTrade[];
-
-  // Config info
-  config: BacktestConfig;
-  strategy: ParsedStrategy;
-  executionTime: number;
-}
+// Re-export types for backward compatibility
+export type {
+  BacktestKline,
+  BacktestConfig,
+  BacktestResult,
+  BacktestTrade,
+  ParsedStrategy,
+  EquityPoint,
+  StrategySignal,
+  DetailedTrade,
+  BacktestDailyLog,
+  EnhancedBacktestResult,
+};
 
 // =============================================================================
 // INDICATOR CALCULATIONS / 指标计算
@@ -498,6 +433,11 @@ function generateSignal(
 /**
  * Run backtest with given strategy and data
  * 使用给定策略和数据运行回测
+ *
+ * Enhanced version with:
+ * - Lot size rules (一手规则)
+ * - Detailed trade records (详细交易记录)
+ * - Daily logs (每日日志)
  */
 export async function runBacktest(
   strategyCode: string,
@@ -509,11 +449,19 @@ export async function runBacktest(
   // Parse strategy
   const strategy = parseStrategyCode(strategyCode);
 
+  // Get lot size configuration
+  const lotSizeConfig = getLotSizeConfig(config.symbol);
+  const assetType = detectAssetType(config.symbol);
+
   // Initialize state
   let cash = config.initialCapital;
   let position = 0;
   let positionPrice = 0;
+  let entryTradeId: string | null = null;
+  let entryTime = 0;
   const trades: BacktestTrade[] = [];
+  const detailedTrades: DetailedTrade[] = [];
+  const dailyLogs: BacktestDailyLog[] = [];
   const equityCurve: EquityPoint[] = [];
 
   // Pre-calculate indicators
@@ -534,53 +482,141 @@ export async function runBacktest(
   const dailyReturns: number[] = [];
   let prevEquity = config.initialCapital;
 
+  // Track trading costs
+  let totalCommission = 0;
+  let totalSlippage = 0;
+
   // Run through each bar
   for (let i = 1; i < klines.length; i++) {
     const bar = klines[i];
     if (!bar) continue;
 
     const currentPrice = bar.close;
+    const date = new Date(bar.time * 1000).toISOString().split("T")[0] ?? "";
+
+    // Get current indicator values
+    const currentIndicators = {
+      sma5: indicators.sma5[i],
+      sma10: indicators.sma10[i],
+      sma20: indicators.sma20[i],
+      sma60: indicators.sma60[i],
+      rsi: indicators.rsi[i],
+      macdDif: indicators.macd.dif[i],
+      macdDea: indicators.macd.dea[i],
+      macdHist: indicators.macd.histogram[i],
+      bollUpper: indicators.boll.upper[i],
+      bollMiddle: indicators.boll.middle[i],
+      bollLower: indicators.boll.lower[i],
+    };
 
     // Generate signal
     const signal = generateSignal(strategy, klines, i, position, indicators);
 
+    // Track action for daily log
+    let action = "持有";
+    let actionDetail = "";
+
     // Execute signal
     if (signal.action === "buy" && position === 0 && cash > 0) {
-      // Calculate position size
-      const commission = cash * config.commission;
-      const slippage = currentPrice * config.slippage;
-      const buyPrice = currentPrice + slippage;
-      const buySize = Math.floor((cash - commission) / buyPrice);
+      // Calculate position size using lot size rules
+      const slippageAmount = currentPrice * config.slippage;
+      const buyPrice = currentPrice + slippageAmount;
 
-      if (buySize > 0) {
-        const cost = buySize * buyPrice + commission;
-        cash -= cost;
+      // Use lot size calculation
+      const lotCalc = calculateMaxAffordableLots(
+        cash,
+        buyPrice,
+        config.symbol,
+        config.commission,
+      );
+
+      if (lotCalc.actualQuantity > 0) {
+        const buySize = lotCalc.actualQuantity;
+        const cost = buySize * buyPrice;
+        const commission = cost * config.commission;
+        const totalCost = cost + commission;
+
+        // Record state before trade
+        const cashBefore = cash;
+        const positionBefore = position;
+        const portfolioValueBefore = cash + position * currentPrice;
+
+        cash -= totalCost;
         position = buySize;
         positionPrice = buyPrice;
+        entryTime = bar.time;
+        entryTradeId = `T${trades.length + 1}`;
 
+        // Track costs
+        totalCommission += commission;
+        totalSlippage += slippageAmount * buySize;
+
+        // Create legacy trade record
         trades.push({
-          id: `T${trades.length + 1}`,
+          id: entryTradeId,
           type: "buy",
           price: buyPrice,
           size: buySize,
           timestamp: bar.time,
           reason: signal.reason ?? "Buy signal",
         });
+
+        // Create detailed trade record
+        detailedTrades.push({
+          id: entryTradeId,
+          timestamp: bar.time,
+          date,
+          type: "buy",
+          signalPrice: currentPrice,
+          executePrice: buyPrice,
+          slippage: slippageAmount * buySize,
+          slippagePercent: config.slippage * 100,
+          commission,
+          commissionPercent: config.commission * 100,
+          totalCost: commission + slippageAmount * buySize,
+          lotCalculation: lotCalc,
+          requestedQuantity: lotCalc.requestedQuantity,
+          actualQuantity: buySize,
+          cashBefore,
+          cashAfter: cash,
+          positionBefore,
+          positionAfter: position,
+          portfolioValueBefore,
+          portfolioValueAfter: cash + position * currentPrice,
+          triggerReason: signal.reason ?? "Buy signal",
+          indicatorValues: currentIndicators as Record<string, number>,
+        });
+
+        action = `买入${formatQuantityWithUnit(buySize, config.symbol)}`;
+        actionDetail = `价格${buyPrice.toFixed(2)}, 手续费${commission.toFixed(2)}, 滑点${(slippageAmount * buySize).toFixed(2)}`;
       }
     } else if (signal.action === "sell" && position > 0) {
       // Sell position
-      const slippage = currentPrice * config.slippage;
-      const sellPrice = currentPrice - slippage;
+      const slippageAmount = currentPrice * config.slippage;
+      const sellPrice = currentPrice - slippageAmount;
       const revenue = position * sellPrice;
       const commission = revenue * config.commission;
 
       const pnl = revenue - commission - position * positionPrice;
       const pnlPercent = (pnl / (position * positionPrice)) * 100;
+      const holdingDays = (bar.time - entryTime) / 86400;
+
+      // Record state before trade
+      const cashBefore = cash;
+      const positionBefore = position;
+      const portfolioValueBefore = cash + position * currentPrice;
 
       cash += revenue - commission;
 
+      // Track costs
+      totalCommission += commission;
+      totalSlippage += slippageAmount * position;
+
+      const sellTradeId = `T${trades.length + 1}`;
+
+      // Create legacy trade record
       trades.push({
-        id: `T${trades.length + 1}`,
+        id: sellTradeId,
         type: "sell",
         price: sellPrice,
         size: position,
@@ -590,12 +626,51 @@ export async function runBacktest(
         pnlPercent,
       });
 
+      // Create lot calculation for sell
+      const sellLotCalc = roundToLot(position, config.symbol, "sell");
+
+      // Create detailed trade record
+      detailedTrades.push({
+        id: sellTradeId,
+        timestamp: bar.time,
+        date,
+        type: "sell",
+        signalPrice: currentPrice,
+        executePrice: sellPrice,
+        slippage: slippageAmount * position,
+        slippagePercent: config.slippage * 100,
+        commission,
+        commissionPercent: config.commission * 100,
+        totalCost: commission + slippageAmount * position,
+        lotCalculation: sellLotCalc,
+        requestedQuantity: position,
+        actualQuantity: position,
+        cashBefore,
+        cashAfter: cash,
+        positionBefore,
+        positionAfter: 0,
+        portfolioValueBefore,
+        portfolioValueAfter: cash,
+        pnl,
+        pnlPercent,
+        holdingDays,
+        entryTradeId: entryTradeId ?? undefined,
+        triggerReason: signal.reason ?? "Sell signal",
+        indicatorValues: currentIndicators as Record<string, number>,
+      });
+
+      action = `卖出${formatQuantityWithUnit(position, config.symbol)}`;
+      actionDetail = `价格${sellPrice.toFixed(2)}, 盈亏${pnl >= 0 ? "+" : ""}${pnl.toFixed(2)} (${pnlPercent >= 0 ? "+" : ""}${pnlPercent.toFixed(2)}%)`;
+
       position = 0;
       positionPrice = 0;
+      entryTradeId = null;
+      entryTime = 0;
     }
 
     // Calculate equity
     const equity = cash + position * currentPrice;
+    const positionValue = position * currentPrice;
 
     // Track drawdown
     if (equity > peakEquity) {
@@ -609,10 +684,36 @@ export async function runBacktest(
     // Track daily return
     const dailyReturn = (equity - prevEquity) / prevEquity;
     dailyReturns.push(dailyReturn);
+
+    // Create daily log entry
+    dailyLogs.push({
+      bar: i,
+      date,
+      time: bar.time,
+      open: bar.open,
+      high: bar.high,
+      low: bar.low,
+      close: bar.close,
+      volume: bar.volume,
+      indicators: currentIndicators,
+      signal: signal.action !== "hold" ? signal.action : null,
+      signalReason: signal.action !== "hold" ? (signal.reason ?? null) : null,
+      action,
+      actionDetail,
+      cash,
+      position,
+      positionValue,
+      portfolioValue: equity,
+      portfolioReturn:
+        ((equity - config.initialCapital) / config.initialCapital) * 100,
+      dailyReturn: dailyReturn * 100,
+      drawdown: drawdown * 100,
+      peakValue: peakEquity,
+    });
+
     prevEquity = equity;
 
     // Record equity point
-    const date = new Date(bar.time * 1000).toISOString().split("T")[0] ?? "";
     equityCurve.push({
       date,
       equity,
@@ -629,10 +730,17 @@ export async function runBacktest(
       const revenue = position * finalPrice;
       const commission = revenue * config.commission;
       const pnl = revenue - commission - position * positionPrice;
+      const holdingDays = (lastBar.time - entryTime) / 86400;
+
+      totalCommission += commission;
       cash += revenue - commission;
 
+      const sellTradeId = `T${trades.length + 1}`;
+      const date =
+        new Date(lastBar.time * 1000).toISOString().split("T")[0] ?? "";
+
       trades.push({
-        id: `T${trades.length + 1}`,
+        id: sellTradeId,
         type: "sell",
         price: finalPrice,
         size: position,
@@ -640,6 +748,39 @@ export async function runBacktest(
         reason: "回测结束平仓",
         pnl,
         pnlPercent: (pnl / (position * positionPrice)) * 100,
+      });
+
+      // Create lot calculation for final sell
+      const sellLotCalc = roundToLot(position, config.symbol, "sell");
+
+      detailedTrades.push({
+        id: sellTradeId,
+        timestamp: lastBar.time,
+        date,
+        type: "sell",
+        signalPrice: finalPrice,
+        executePrice: finalPrice,
+        slippage: 0,
+        slippagePercent: 0,
+        commission,
+        commissionPercent: config.commission * 100,
+        totalCost: commission,
+        lotCalculation: sellLotCalc,
+        requestedQuantity: position,
+        actualQuantity: position,
+        cashBefore: cash - revenue + commission,
+        cashAfter: cash,
+        positionBefore: position,
+        positionAfter: 0,
+        portfolioValueBefore:
+          cash - revenue + commission + position * finalPrice,
+        portfolioValueAfter: cash,
+        pnl,
+        pnlPercent: (pnl / (position * positionPrice)) * 100,
+        holdingDays,
+        entryTradeId: entryTradeId ?? undefined,
+        triggerReason: "回测结束平仓",
+        indicatorValues: {},
       });
     }
   }
@@ -694,6 +835,21 @@ export async function runBacktest(
     0,
   );
 
+  // Find dates for max win/loss
+  const maxWinTrade = completedTrades.find(
+    (t) => t.pnlPercent === maxSingleWin,
+  );
+  const maxLossTrade = completedTrades.find(
+    (t) => t.pnlPercent === maxSingleLoss,
+  );
+  const maxSingleWinDate = maxWinTrade
+    ? (new Date(maxWinTrade.timestamp * 1000).toISOString().split("T")[0] ?? "")
+    : "";
+  const maxSingleLossDate = maxLossTrade
+    ? (new Date(maxLossTrade.timestamp * 1000).toISOString().split("T")[0] ??
+      "")
+    : "";
+
   // Calculate Sharpe ratio (simplified, using daily returns)
   const avgReturn =
     dailyReturns.length > 0
@@ -722,6 +878,13 @@ export async function runBacktest(
     downsideDeviation > 0
       ? (avgReturn * 252) / (downsideDeviation * Math.sqrt(252))
       : 0;
+
+  // Calculate Calmar ratio
+  const calmarRatio =
+    maxDrawdown > 0 ? annualizedReturn / (maxDrawdown * 100) : 0;
+
+  // Calculate volatility
+  const volatility = stdReturn * Math.sqrt(252) * 100;
 
   // Calculate consecutive wins/losses
   let maxConsecutiveWins = 0;
@@ -760,6 +923,73 @@ export async function runBacktest(
 
   const executionTime = Date.now() - startTime;
 
+  // Calculate trading cost percentage
+  const totalTradingCost = totalCommission + totalSlippage;
+  const tradingCostPercent = (totalTradingCost / config.initialCapital) * 100;
+
+  // Build enhanced result
+  const summary: BacktestSummary = {
+    startDate: config.startDate,
+    endDate: config.endDate,
+    tradingDays,
+    executionTime,
+    initialCapital: config.initialCapital,
+    finalCapital: finalEquity,
+    peakCapital: peakEquity,
+    troughCapital: peakEquity * (1 - maxDrawdown),
+    totalReturn,
+    annualizedReturn,
+    monthlyReturn: annualizedReturn / 12,
+    dailyReturn: avgReturn * 100,
+    maxDrawdown: maxDrawdown * 100,
+    maxDrawdownDuration: 0, // TODO: Calculate actual duration
+    volatility,
+    sharpeRatio,
+    sortinoRatio,
+    calmarRatio,
+    totalTrades: completedTrades.length,
+    winningTrades: winningTrades.length,
+    losingTrades: losingTrades.length,
+    winRate,
+    profitFactor,
+    avgWin,
+    avgLoss,
+    avgWinLossRatio: avgLoss > 0 ? avgWin / avgLoss : 0,
+    maxConsecutiveWins,
+    maxConsecutiveLosses,
+    avgHoldingPeriod,
+    maxSingleWin,
+    maxSingleWinDate,
+    maxSingleLoss,
+    maxSingleLossDate,
+    totalCommission,
+    totalSlippage,
+    totalTradingCost,
+    tradingCostPercent,
+  };
+
+  const enhancedResult: EnhancedBacktestResult = {
+    summary,
+    equityCurve: equityCurve.map((e) => ({
+      ...e,
+      cash:
+        e.equity -
+        (e.position > 0
+          ? e.position * (klines[klines.length - 1]?.close ?? 0)
+          : 0),
+    })),
+    trades: detailedTrades,
+    dailyLogs,
+    config,
+    strategy,
+    lotSizeInfo: {
+      assetType,
+      lotSize: lotSizeConfig.lotSize,
+      description: lotSizeConfig.description,
+    },
+  };
+
+  // Return backward-compatible result with enhanced data
   return {
     totalReturn,
     annualizedReturn,
@@ -781,6 +1011,7 @@ export async function runBacktest(
     config,
     strategy,
     executionTime,
+    enhanced: enhancedResult,
   };
 }
 
