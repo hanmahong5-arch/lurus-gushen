@@ -465,9 +465,94 @@ Integrate all functions (data preparation, backtesting) into the web interface w
 
 ---
 
+## 2026-01-19: K8s Production Deployment / K8s生产部署
+
+### User Request / 用户需求
+Deploy the complete frontend-backend system to K3s cluster with industrial-grade stability.
+
+将完整的前后端系统部署到K3s集群，实现工业级稳定性。
+
+### Implementation / 实现内容
+
+#### Phase 1: Backend Deployment / 后端部署
+
+**Docker Image (lurus-ai-qtrd:v1.0.4):**
+- Multi-stage build with TA-Lib compilation
+- Dependencies: VNPy, TA-Lib, alphalens-reloaded, lightgbm, scikit-learn
+- Total image size: ~450MB
+
+**K8s Resources:**
+- `k8s/ai-qtrd/02-configmap.yaml` - Updated to use lurus-api gateway
+- `k8s/ai-qtrd/03-api-deployment.yaml` - Resource limits, node affinity
+- `k8s/ai-qtrd/05-services.yaml` - Fixed label selectors
+- `k8s/ai-qtrd/06-ingress-routes.yaml` - Complete routing configuration
+
+**Traefik IngressRoute Configuration:**
+- `/health` → Backend API
+- `/api/strategy/generate` → Frontend (Next.js → lurus-api)
+- `/api/strategy/*` (other) → Backend FastAPI
+- `/api/trading/*` → Backend
+- `/api/account/*` → Backend
+- `/api/market/*` → Backend
+- `/api/data/*` → Backend
+- `/api/backtest/*` → Backend
+- `/api/advisor/*` → Frontend (Next.js → lurus-api)
+- `/api/auth/*` → Frontend (NextAuth)
+- `/ws` → Backend WebSocket
+- `/docs`, `/openapi.json` → Backend Swagger
+
+#### Phase 2: Frontend Integration / 前端集成
+
+**New Frontend Files:**
+- `src/app/api/backend/[...path]/route.ts` - Backend API proxy
+- `src/app/dashboard/strategies/page.tsx` - Strategy management page
+- `src/app/dashboard/paper-trading/page.tsx` - Paper trading page
+- `src/app/dashboard/account/page.tsx` - Account management page
+- `src/hooks/use-websocket.ts` - WebSocket hook with auto-reconnect
+
+**Trading Edge Cases Handled:**
+- Volume validation (A-share: multiples of 100)
+- Minimum volume validation (≥100 shares)
+- Insufficient funds check before buy
+- Insufficient position check before sell
+- Order status tracking (SUBMITTING → TRADED/CANCELLED/REJECTED)
+- WebSocket auto-reconnect with exponential backoff
+
+### Result / 结果
+
+**Backend API Endpoints Verified:**
+- `GET https://gushen.lurus.cn/health` ✓
+- `GET https://gushen.lurus.cn/api/account/info` ✓
+- `GET https://gushen.lurus.cn/api/strategy/list` ✓
+- `POST https://gushen.lurus.cn/api/strategy/generate` ✓ (routed to frontend)
+- `GET https://gushen.lurus.cn/docs` ✓ (Swagger UI)
+
+**Services Running:**
+- ai-qtrd-api: 1/1 Running (FastAPI backend)
+- ai-qtrd-web: 1/1 Running (Next.js frontend)
+
+### Deployment Commands / 部署命令
+
+```bash
+# Build Docker image
+cd lurus-ai-qtrd
+docker build -t lurus-ai-qtrd:v1.0.4 .
+
+# Export and transfer to K3s nodes
+docker save lurus-ai-qtrd:v1.0.4 -o /tmp/lurus-ai-qtrd-v1.0.4.tar
+scp /tmp/lurus-ai-qtrd-v1.0.4.tar root@node:/tmp/
+ssh root@node "k3s ctr images import /tmp/lurus-ai-qtrd-v1.0.4.tar"
+
+# Apply K8s resources
+kubectl apply -f k8s/ai-qtrd/
+```
+
+---
+
 ## Known Issues / 已知问题
 
 1. AData library needs to be installed separately (`pip install adata`)
 2. DeepSeek API key must be set via environment variable
 3. ~~Backtest script requires vnpy alpha module data structure~~ ✓ Fixed with prepare_data.py
 4. xtquant SDK not installed - QMT Gateway unavailable (expected for non-QMT users)
+5. Frontend build requires Node.js 18+ and npm

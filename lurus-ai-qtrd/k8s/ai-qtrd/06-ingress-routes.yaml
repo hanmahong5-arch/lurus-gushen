@@ -23,6 +23,41 @@ spec:
     secretName: gushen-lurus-cn-tls
 
 ---
+# Frontend API routes - Next.js API routes that need LLM access
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: ai-qtrd-frontend-api
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: ingress
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    # Strategy generation (calls lurus-api/DeepSeek)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/strategy/generate`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    # AI Advisor chat (calls lurus-api/DeepSeek)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/advisor`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+    # Auth routes (Next.js NextAuth)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/auth`)
+      kind: Rule
+      services:
+        - name: ai-qtrd-web
+          port: 3000
+  tls:
+    secretName: gushen-lurus-cn-tls
+
+---
 # API route (backend) - Routes all backend API requests to the FastAPI service
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute
@@ -42,8 +77,8 @@ spec:
       services:
         - name: ai-qtrd-api
           port: 8000
-    # Backend API endpoints (strategy, trading, account, market, data, backtest)
-    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/strategy`)
+    # Backend strategy API (parse, create, list, etc. - NOT generate)
+    - match: Host(`gushen.lurus.cn`) && PathPrefix(`/api/strategy`) && !PathPrefix(`/api/strategy/generate`)
       kind: Rule
       services:
         - name: ai-qtrd-api
