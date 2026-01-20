@@ -682,8 +682,12 @@ export function KLineChart({
         </div>
       )}
 
-      {/* Chart container */}
-      <div ref={chartContainerRef} className="w-full" />
+      {/* Chart container - Fixed height to prevent flashing */}
+      <div
+        ref={chartContainerRef}
+        className="w-full"
+        style={{ height: `${height}px`, minHeight: `${height}px` }}
+      />
     </div>
   );
 }

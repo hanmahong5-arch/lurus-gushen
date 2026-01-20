@@ -19,6 +19,8 @@ import {
   marketInfo,
   classicStrategies,
   popularStrategies,
+  academicStrategies,
+  practitionerStrategies,
   getStrategiesByCategory,
 } from "@/lib/strategy-templates";
 
@@ -278,8 +280,10 @@ function StrategyTemplateCard({
 export function StrategyTemplateList({
   onSelectTemplate,
 }: StrategyTemplateListProps) {
-  // State for tab selection (classic / popular)
-  const [activeTab, setActiveTab] = useState<"classic" | "popular">("classic");
+  // State for tab selection (classic / popular / academic / practitioner)
+  const [activeTab, setActiveTab] = useState<
+    "classic" | "popular" | "academic" | "practitioner"
+  >("classic");
 
   // State for category filter
   const [selectedCategory, setSelectedCategory] = useState<
@@ -289,24 +293,40 @@ export function StrategyTemplateList({
   // State for expanded card
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
+  // Get strategies based on active tab
+  const getStrategiesForTab = () => {
+    switch (activeTab) {
+      case "classic":
+        return classicStrategies;
+      case "popular":
+        return popularStrategies;
+      case "academic":
+        return academicStrategies;
+      case "practitioner":
+        return practitionerStrategies;
+      default:
+        return classicStrategies;
+    }
+  };
+
   // Get available categories based on active tab
   const availableCategories = useMemo(() => {
-    const strategies =
-      activeTab === "classic" ? classicStrategies : popularStrategies;
+    const strategies = getStrategiesForTab();
     const cats = new Set(strategies.map((s) => s.category));
     return Array.from(cats);
   }, [activeTab]);
 
   // Filter strategies based on tab and category
   const filteredStrategies = useMemo(() => {
-    const base =
-      activeTab === "classic" ? classicStrategies : popularStrategies;
+    const base = getStrategiesForTab();
     if (selectedCategory === "all") return base;
     return base.filter((s) => s.category === selectedCategory);
   }, [activeTab, selectedCategory]);
 
   // Handle tab change - reset category filter
-  const handleTabChange = (tab: "classic" | "popular") => {
+  const handleTabChange = (
+    tab: "classic" | "popular" | "academic" | "practitioner",
+  ) => {
     setActiveTab(tab);
     setSelectedCategory("all");
     setExpandedId(null);
@@ -320,34 +340,64 @@ export function StrategyTemplateList({
           <span>📚</span>
           <span>策略模板库</span>
           <span className="text-sm text-gray-500 font-normal">
-            (40个经典 & 流行策略)
+            (60+个策略模板)
           </span>
         </h2>
       </div>
 
       {/* Tab Switcher / Tab 切换 */}
-      <div className="flex items-center gap-4 border-b border-gray-700 pb-3">
+      <div className="flex items-center gap-2 border-b border-gray-700 pb-3 flex-wrap">
         <button
           onClick={() => handleTabChange("classic")}
-          className={`px-4 py-2 rounded-t text-sm font-medium transition-colors ${
+          className={`px-3 py-2 rounded-t text-sm font-medium transition-colors ${
             activeTab === "classic"
               ? "bg-blue-600 text-white"
               : "bg-gray-800 text-gray-400 hover:text-white"
           }`}
         >
           🏛️ 经典策略
-          <span className="ml-1 text-xs opacity-70">(20)</span>
+          <span className="ml-1 text-xs opacity-70">
+            ({classicStrategies.length})
+          </span>
         </button>
         <button
           onClick={() => handleTabChange("popular")}
-          className={`px-4 py-2 rounded-t text-sm font-medium transition-colors ${
+          className={`px-3 py-2 rounded-t text-sm font-medium transition-colors ${
             activeTab === "popular"
               ? "bg-blue-600 text-white"
               : "bg-gray-800 text-gray-400 hover:text-white"
           }`}
         >
           🔥 流行策略
-          <span className="ml-1 text-xs opacity-70">(20)</span>
+          <span className="ml-1 text-xs opacity-70">
+            ({popularStrategies.length})
+          </span>
+        </button>
+        <button
+          onClick={() => handleTabChange("academic")}
+          className={`px-3 py-2 rounded-t text-sm font-medium transition-colors ${
+            activeTab === "academic"
+              ? "bg-purple-600 text-white"
+              : "bg-gray-800 text-gray-400 hover:text-white"
+          }`}
+        >
+          🎓 学术策略
+          <span className="ml-1 text-xs opacity-70">
+            ({academicStrategies.length})
+          </span>
+        </button>
+        <button
+          onClick={() => handleTabChange("practitioner")}
+          className={`px-3 py-2 rounded-t text-sm font-medium transition-colors ${
+            activeTab === "practitioner"
+              ? "bg-green-600 text-white"
+              : "bg-gray-800 text-gray-400 hover:text-white"
+          }`}
+        >
+          💼 实战策略
+          <span className="ml-1 text-xs opacity-70">
+            ({practitionerStrategies.length})
+          </span>
         </button>
 
         {/* Category Filter / 分类筛选 */}
@@ -374,14 +424,12 @@ export function StrategyTemplateList({
       <div className="text-sm text-gray-400 bg-gray-800/50 rounded p-3">
         {activeTab === "classic" ? (
           <p>
-            🏛️{" "}
-            <strong className="text-gray-300">经典策略</strong>
+            🏛️ <strong className="text-gray-300">经典策略</strong>
             ：源于华尔街的永恒智慧，经过数十年市场验证。这些策略基于人性的贪婪与恐惧、市场的趋势与回归等永恒规律，在股票、期货、加密货币市场中广泛适用。
           </p>
         ) : (
           <p>
-            🔥{" "}
-            <strong className="text-gray-300">流行策略</strong>
+            🔥 <strong className="text-gray-300">流行策略</strong>
             ：当代交易者的智慧结晶，包括因子投资、量化套利、加密货币特有策略等。这些策略融合了现代金融理论与技术，适合不同市场环境和风险偏好。
           </p>
         )}
@@ -412,7 +460,8 @@ export function StrategyTemplateList({
       {/* Usage Tips / 使用提示 */}
       <div className="text-xs text-gray-500 bg-gray-900/50 rounded p-3 space-y-1">
         <p>
-          💡 <strong>提示</strong>：点击卡片展开查看详细信息，点击"使用"将策略描述填入输入框
+          💡 <strong>提示</strong>
+          ：点击卡片展开查看详细信息，点击"使用"将策略描述填入输入框
         </p>
         <p>
           ⚠️ <strong>风险提示</strong>
