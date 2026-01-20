@@ -169,6 +169,9 @@ export function KLineChart({
   const [chartInitialized, setChartInitialized] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
+  // Use ref to prevent re-initialization
+  const isInitializingRef = useRef(false);
+
   // Refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -258,7 +261,11 @@ export function KLineChart({
   // Initialize chart (only once, after hydration)
   useEffect(() => {
     // Wait for client-side hydration to complete
-    if (!isClient || chartInitialized) return;
+    // Use ref to prevent multiple initializations
+    if (!isClient || chartInitialized || isInitializingRef.current) return;
+
+    // Mark as initializing to prevent re-entry
+    isInitializingRef.current = true;
 
     // Use requestAnimationFrame to ensure DOM is ready
     let cancelled = false;
@@ -266,7 +273,10 @@ export function KLineChart({
     let chart: IChartApi | null = null;
 
     const initChart = () => {
-      if (cancelled || !chartContainerRef.current) return;
+      if (cancelled || !chartContainerRef.current) {
+        isInitializingRef.current = false;
+        return;
+      }
 
       const rect = chartContainerRef.current.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) {
@@ -427,7 +437,7 @@ export function KLineChart({
     // Start initialization on next frame
     requestAnimationFrame(initChart);
 
-    // Cleanup
+    // Cleanup - only runs on unmount
     return () => {
       cancelled = true;
       clearTimeout(resizeTimeout);
@@ -439,17 +449,12 @@ export function KLineChart({
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
       maSeriesRefs.current = [];
+      isInitializingRef.current = false;
       setChartInitialized(false);
     };
-  }, [
-    isClient,
-    height,
-    showVolume,
-    showMA,
-    maWindows,
-    symbol,
-    chartInitialized,
-  ]);
+    // Only depend on isClient - chart should initialize once after hydration
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isClient]);
 
   // Update chart data when data changes - THIS IS THE KEY EFFECT
   useEffect(() => {
