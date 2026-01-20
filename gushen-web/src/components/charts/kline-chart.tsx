@@ -165,8 +165,9 @@ export function KLineChart({
     time: null,
   });
 
-  // Track whether chart is initialized
+  // Track whether chart is initialized and hydration complete
   const [chartInitialized, setChartInitialized] = useState(false);
+  const [isClient, setIsClient] = useState(false);
 
   // Refs
   const chartContainerRef = useRef<HTMLDivElement>(null);
@@ -196,9 +197,16 @@ export function KLineChart({
   // Use external data if provided, otherwise use fetched data
   const klineData = externalData ?? fetchedData;
 
-  // Get trading status for display
-  const tradingStatus = getTradingStatusInfo();
-  const dataTimestamp = getDataTimestampLabel();
+  // Hydration safety - only run client-side code after mount
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  // Get trading status for display (only on client to avoid hydration mismatch)
+  const tradingStatus = isClient
+    ? getTradingStatusInfo()
+    : { label: "", color: "gray" as const };
+  const dataTimestamp = isClient ? getDataTimestampLabel() : "";
 
   // Convert KLineData to chart format
   const chartData = useMemo(() => {
@@ -247,176 +255,201 @@ export function KLineChart({
     [selectedTimeFrame, onTimeFrameChange, refresh],
   );
 
-  // Initialize chart (only once)
+  // Initialize chart (only once, after hydration)
   useEffect(() => {
-    if (!chartContainerRef.current || chartInitialized) return;
+    // Wait for client-side hydration to complete
+    if (!isClient || chartInitialized) return;
 
-    // Ensure container has dimensions before initializing
-    const rect = chartContainerRef.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) {
-      console.log(`[KLineChart] Container has no dimensions, waiting...`);
-      return;
-    }
+    // Use requestAnimationFrame to ensure DOM is ready
+    let cancelled = false;
+    let resizeTimeout: NodeJS.Timeout;
+    let chart: IChartApi | null = null;
 
-    console.log(`[KLineChart] Initializing chart for ${symbol}`);
+    const initChart = () => {
+      if (cancelled || !chartContainerRef.current) return;
 
-    // Create chart instance
-    const chart = createChart(chartContainerRef.current, {
-      width: chartContainerRef.current.clientWidth,
-      height: height,
-      layout: {
-        background: { type: ColorType.Solid, color: CHART_COLORS.background },
-        textColor: CHART_COLORS.text,
-      },
-      grid: {
-        vertLines: { color: CHART_COLORS.grid },
-        horzLines: { color: CHART_COLORS.grid },
-      },
-      crosshair: {
-        mode: CrosshairMode.Normal,
-        vertLine: {
-          color: CHART_COLORS.crosshair,
-          width: 1,
-          style: 2,
-          labelBackgroundColor: CHART_COLORS.crosshair,
-        },
-        horzLine: {
-          color: CHART_COLORS.crosshair,
-          width: 1,
-          style: 2,
-          labelBackgroundColor: CHART_COLORS.crosshair,
-        },
-      },
-      rightPriceScale: {
-        borderColor: CHART_COLORS.grid,
-        scaleMargins: {
-          top: 0.1,
-          bottom: showVolume ? 0.25 : 0.1,
-        },
-      },
-      timeScale: {
-        borderColor: CHART_COLORS.grid,
-        timeVisible: true,
-        secondsVisible: false,
-      },
-    });
-
-    chartRef.current = chart;
-
-    // Add candlestick series
-    const candleSeries = chart.addCandlestickSeries({
-      upColor: CHART_COLORS.upColor,
-      downColor: CHART_COLORS.downColor,
-      borderVisible: false,
-      wickUpColor: CHART_COLORS.upColor,
-      wickDownColor: CHART_COLORS.downColor,
-    });
-    candleSeriesRef.current = candleSeries;
-
-    // Add volume series
-    if (showVolume) {
-      const volumeSeries = chart.addHistogramSeries({
-        color: CHART_COLORS.volumeUp,
-        priceFormat: { type: "volume" },
-        priceScaleId: "",
-      });
-      volumeSeries.priceScale().applyOptions({
-        scaleMargins: { top: 0.8, bottom: 0 },
-      });
-      volumeSeriesRef.current = volumeSeries;
-    }
-
-    // Add MA lines
-    if (showMA) {
-      maSeriesRefs.current = maWindows.map((_, index) => {
-        return chart.addLineSeries({
-          color: MA_COLORS[index % MA_COLORS.length],
-          lineWidth: 1,
-          crosshairMarkerVisible: false,
-          priceLineVisible: false,
-          lastValueVisible: false,
-        });
-      });
-    }
-
-    // Handle crosshair move
-    chart.subscribeCrosshairMove((param) => {
-      if (!param.time || !param.seriesData) {
-        setCrosshairData({
-          price: null,
-          open: null,
-          high: null,
-          low: null,
-          change: null,
-          changePercent: null,
-          volume: null,
-          time: null,
-        });
+      const rect = chartContainerRef.current.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) {
+        // Retry on next frame if container not ready
+        requestAnimationFrame(initChart);
         return;
       }
 
-      const candleData = param.seriesData.get(candleSeries) as
-        | CandlestickData<Time>
-        | undefined;
-      const volumeData = volumeSeriesRef.current
-        ? (param.seriesData.get(volumeSeriesRef.current) as
-            | HistogramData<Time>
-            | undefined)
-        : undefined;
+      console.log(
+        `[KLineChart] Initializing chart for ${symbol}, container: ${rect.width}x${rect.height}`,
+      );
 
-      if (candleData) {
-        const change = candleData.close - candleData.open;
-        const changePercent = (change / candleData.open) * 100;
+      // Create chart instance
+      chart = createChart(chartContainerRef.current, {
+        width: chartContainerRef.current.clientWidth,
+        height: height,
+        layout: {
+          background: { type: ColorType.Solid, color: CHART_COLORS.background },
+          textColor: CHART_COLORS.text,
+        },
+        grid: {
+          vertLines: { color: CHART_COLORS.grid },
+          horzLines: { color: CHART_COLORS.grid },
+        },
+        crosshair: {
+          mode: CrosshairMode.Normal,
+          vertLine: {
+            color: CHART_COLORS.crosshair,
+            width: 1,
+            style: 2,
+            labelBackgroundColor: CHART_COLORS.crosshair,
+          },
+          horzLine: {
+            color: CHART_COLORS.crosshair,
+            width: 1,
+            style: 2,
+            labelBackgroundColor: CHART_COLORS.crosshair,
+          },
+        },
+        rightPriceScale: {
+          borderColor: CHART_COLORS.grid,
+          scaleMargins: {
+            top: 0.1,
+            bottom: showVolume ? 0.25 : 0.1,
+          },
+        },
+        timeScale: {
+          borderColor: CHART_COLORS.grid,
+          timeVisible: true,
+          secondsVisible: false,
+        },
+      });
 
-        // Format time
-        const date = new Date((param.time as number) * 1000);
-        const timeStr = date.toLocaleDateString("zh-CN", {
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
+      chartRef.current = chart;
+
+      // Add candlestick series
+      const candleSeries = chart.addCandlestickSeries({
+        upColor: CHART_COLORS.upColor,
+        downColor: CHART_COLORS.downColor,
+        borderVisible: false,
+        wickUpColor: CHART_COLORS.upColor,
+        wickDownColor: CHART_COLORS.downColor,
+      });
+      candleSeriesRef.current = candleSeries;
+
+      // Add volume series
+      if (showVolume) {
+        const volumeSeries = chart.addHistogramSeries({
+          color: CHART_COLORS.volumeUp,
+          priceFormat: { type: "volume" },
+          priceScaleId: "",
         });
+        volumeSeries.priceScale().applyOptions({
+          scaleMargins: { top: 0.8, bottom: 0 },
+        });
+        volumeSeriesRef.current = volumeSeries;
+      }
 
-        setCrosshairData({
-          price: candleData.close,
-          open: candleData.open,
-          high: candleData.high,
-          low: candleData.low,
-          change: parseFloat(change.toFixed(2)),
-          changePercent: parseFloat(changePercent.toFixed(2)),
-          volume: volumeData?.value ?? null,
-          time: timeStr,
+      // Add MA lines
+      if (showMA) {
+        maSeriesRefs.current = maWindows.map((_, index) => {
+          return chart!.addLineSeries({
+            color: MA_COLORS[index % MA_COLORS.length],
+            lineWidth: 1,
+            crosshairMarkerVisible: false,
+            priceLineVisible: false,
+            lastValueVisible: false,
+          });
         });
       }
-    });
 
-    // Handle resize with debounce to prevent flashing
-    let resizeTimeout: NodeJS.Timeout;
-    const handleResize = () => {
-      clearTimeout(resizeTimeout);
-      resizeTimeout = setTimeout(() => {
-        if (chartContainerRef.current && chartRef.current) {
-          chartRef.current.applyOptions({
-            width: chartContainerRef.current.clientWidth,
+      // Handle crosshair move
+      chart.subscribeCrosshairMove((param) => {
+        if (!param.time || !param.seriesData) {
+          setCrosshairData({
+            price: null,
+            open: null,
+            high: null,
+            low: null,
+            change: null,
+            changePercent: null,
+            volume: null,
+            time: null,
+          });
+          return;
+        }
+
+        const candleData = param.seriesData.get(candleSeries) as
+          | CandlestickData<Time>
+          | undefined;
+        const volumeData = volumeSeriesRef.current
+          ? (param.seriesData.get(volumeSeriesRef.current) as
+              | HistogramData<Time>
+              | undefined)
+          : undefined;
+
+        if (candleData) {
+          const change = candleData.close - candleData.open;
+          const changePercent = (change / candleData.open) * 100;
+
+          // Format time
+          const date = new Date((param.time as number) * 1000);
+          const timeStr = date.toLocaleDateString("zh-CN", {
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+          });
+
+          setCrosshairData({
+            price: candleData.close,
+            open: candleData.open,
+            high: candleData.high,
+            low: candleData.low,
+            change: parseFloat(change.toFixed(2)),
+            changePercent: parseFloat(changePercent.toFixed(2)),
+            volume: volumeData?.value ?? null,
+            time: timeStr,
           });
         }
-      }, 150); // 150ms debounce
-    };
-    window.addEventListener("resize", handleResize);
+      });
 
-    setChartInitialized(true);
+      // Handle resize with debounce to prevent flashing
+      const handleResize = () => {
+        clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          if (chartContainerRef.current && chartRef.current) {
+            chartRef.current.applyOptions({
+              width: chartContainerRef.current.clientWidth,
+            });
+          }
+        }, 150);
+      };
+      window.addEventListener("resize", handleResize);
+
+      setChartInitialized(true);
+    };
+
+    // Start initialization on next frame
+    requestAnimationFrame(initChart);
 
     // Cleanup
     return () => {
+      cancelled = true;
       clearTimeout(resizeTimeout);
-      window.removeEventListener("resize", handleResize);
-      chart.remove();
+      window.removeEventListener("resize", () => {});
+      if (chart) {
+        chart.remove();
+      }
       chartRef.current = null;
       candleSeriesRef.current = null;
       volumeSeriesRef.current = null;
       maSeriesRefs.current = [];
       setChartInitialized(false);
     };
-  }, [height, showVolume, showMA, maWindows, symbol, chartInitialized]);
+  }, [
+    isClient,
+    height,
+    showVolume,
+    showMA,
+    maWindows,
+    symbol,
+    chartInitialized,
+  ]);
 
   // Update chart data when data changes - THIS IS THE KEY EFFECT
   useEffect(() => {
