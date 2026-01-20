@@ -794,11 +794,12 @@ export default function TradingPage() {
           {/* Main table section */}
           <div className="col-span-9">
             <div className="bg-surface rounded-xl border border-border">
-              {/* Tabs */}
-              <div className="flex border-b border-border">
+              {/* Tabs - Fixed z-index and button type for proper click handling */}
+              <div className="flex border-b border-border relative z-10">
                 <button
+                  type="button"
                   onClick={() => setActiveTab("market")}
-                  className={`px-6 py-3 text-sm font-medium transition ${
+                  className={`px-6 py-3 text-sm font-medium transition relative z-10 cursor-pointer ${
                     activeTab === "market"
                       ? "text-accent border-b-2 border-accent"
                       : "text-white/50 hover:text-white"
@@ -807,8 +808,9 @@ export default function TradingPage() {
                   实时行情 / Market
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab("positions")}
-                  className={`px-6 py-3 text-sm font-medium transition ${
+                  className={`px-6 py-3 text-sm font-medium transition relative z-10 cursor-pointer ${
                     activeTab === "positions"
                       ? "text-accent border-b-2 border-accent"
                       : "text-white/50 hover:text-white"
@@ -817,8 +819,9 @@ export default function TradingPage() {
                   持仓 / Positions ({positions.length})
                 </button>
                 <button
+                  type="button"
                   onClick={() => setActiveTab("orders")}
-                  className={`px-6 py-3 text-sm font-medium transition ${
+                  className={`px-6 py-3 text-sm font-medium transition relative z-10 cursor-pointer ${
                     activeTab === "orders"
                       ? "text-accent border-b-2 border-accent"
                       : "text-white/50 hover:text-white"

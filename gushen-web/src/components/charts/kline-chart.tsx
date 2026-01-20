@@ -251,6 +251,13 @@ export function KLineChart({
   useEffect(() => {
     if (!chartContainerRef.current || chartInitialized) return;
 
+    // Ensure container has dimensions before initializing
+    const rect = chartContainerRef.current.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) {
+      console.log(`[KLineChart] Container has no dimensions, waiting...`);
+      return;
+    }
+
     console.log(`[KLineChart] Initializing chart for ${symbol}`);
 
     // Create chart instance
@@ -382,13 +389,17 @@ export function KLineChart({
       }
     });
 
-    // Handle resize
+    // Handle resize with debounce to prevent flashing
+    let resizeTimeout: NodeJS.Timeout;
     const handleResize = () => {
-      if (chartContainerRef.current && chartRef.current) {
-        chartRef.current.applyOptions({
-          width: chartContainerRef.current.clientWidth,
-        });
-      }
+      clearTimeout(resizeTimeout);
+      resizeTimeout = setTimeout(() => {
+        if (chartContainerRef.current && chartRef.current) {
+          chartRef.current.applyOptions({
+            width: chartContainerRef.current.clientWidth,
+          });
+        }
+      }, 150); // 150ms debounce
     };
     window.addEventListener("resize", handleResize);
 
@@ -396,6 +407,7 @@ export function KLineChart({
 
     // Cleanup
     return () => {
+      clearTimeout(resizeTimeout);
       window.removeEventListener("resize", handleResize);
       chart.remove();
       chartRef.current = null;
@@ -682,10 +694,10 @@ export function KLineChart({
         </div>
       )}
 
-      {/* Chart container - Fixed height to prevent flashing */}
+      {/* Chart container - Fixed height and background to prevent flashing */}
       <div
         ref={chartContainerRef}
-        className="w-full"
+        className="w-full bg-[#0f1117]"
         style={{ height: `${height}px`, minHeight: `${height}px` }}
       />
     </div>
