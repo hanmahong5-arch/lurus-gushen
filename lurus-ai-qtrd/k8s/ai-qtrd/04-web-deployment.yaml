@@ -34,7 +34,7 @@ spec:
 
       containers:
         - name: web
-          image: gushen-web:v11
+          image: gushen-web:v12
           imagePullPolicy: Never # Use local image imported to containerd
           ports:
             - containerPort: 3000
