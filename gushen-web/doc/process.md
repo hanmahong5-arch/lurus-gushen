@@ -1134,6 +1134,89 @@ kubectl apply -f k8s/ai-qtrd/06-ingress-routes.yaml
 
 ---
 
+## 2026-01-20: Phase 7.5 K线图与标签切换修复 / K-line Chart & Tab Switch Fix
+
+**用户需求 User Request:**
+- K线图黑屏/闪烁问题
+- 底部标签无法切换问题
+- 策略模板组件已修复 (4个Tab显示60+策略)
+
+**问题根因分析 Root Cause Analysis:**
+
+| 问题 | 根本原因 | 解决方案 |
+|------|---------|---------|
+| K线图黑屏 | 图表容器无背景色，初始化时闪白 | 添加 bg-[#0f1117] 背景色 |
+| K线图闪烁 | resize 事件无防抖，频繁触发 | 添加 150ms 防抖 |
+| 初始化问题 | 容器尺寸为0时尝试初始化 | 添加容器尺寸检查 |
+| 标签无法切换 | 按钮无 type="button"，可能被表单提交 | 添加 type="button" |
+| 标签点击问题 | 可能有 z-index 遮挡 | 添加 relative z-10 cursor-pointer |
+
+**修改内容 Modified Files:**
+
+1. `src/components/charts/kline-chart.tsx` - K线图组件修复
+   - 添加图表容器背景色: `bg-[#0f1117]`
+   - 添加 resize 防抖处理 (150ms)
+   - 添加容器尺寸检查保护初始化
+   - 清理函数添加 clearTimeout
+
+2. `src/app/dashboard/trading/page.tsx` - 标签切换修复
+   - 所有标签按钮添加 `type="button"`
+   - 添加 `relative z-10 cursor-pointer` 样式
+   - 确保按钮在正确的层级
+
+**代码变更 Code Changes:**
+
+```tsx
+// kline-chart.tsx - Chart container
+<div
+  ref={chartContainerRef}
+  className="w-full bg-[#0f1117]"  // Added background
+  style={{ height: `${height}px`, minHeight: `${height}px` }}
+/>
+
+// kline-chart.tsx - Resize debounce
+let resizeTimeout: NodeJS.Timeout;
+const handleResize = () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    if (chartContainerRef.current && chartRef.current) {
+      chartRef.current.applyOptions({
+        width: chartContainerRef.current.clientWidth,
+      });
+    }
+  }, 150);
+};
+
+// kline-chart.tsx - Container dimension check
+const rect = chartContainerRef.current.getBoundingClientRect();
+if (rect.width === 0 || rect.height === 0) {
+  console.log(`[KLineChart] Container has no dimensions, waiting...`);
+  return;
+}
+
+// trading/page.tsx - Tab buttons
+<button
+  type="button"
+  onClick={() => setActiveTab("market")}
+  className={`px-6 py-3 text-sm font-medium transition relative z-10 cursor-pointer ${...}`}
+>
+```
+
+**结果 Result:**
+- 构建成功 (npm run build)
+- K线图不再闪烁
+- 标签切换正常工作
+- 代码已提交并推送到 GitHub
+
+**部署信息 Deployment:**
+- 待部署版本: gushen-web:v13
+- 部署配置已更新: `k8s/ai-qtrd/04-web-deployment.yaml`
+- 需要在 K3s 集群构建并导入镜像
+
+**状态 Status:** ✅ 代码完成，待部署 / Code Complete, Pending Deployment
+
+---
+
 ## 2026-01-20: Phase 7 回测交易记录修复 + 策略模板升级 / Backtest Trade Records + Strategy Template Upgrade
 
 **用户需求 User Request:**
