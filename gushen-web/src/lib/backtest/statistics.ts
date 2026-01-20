@@ -567,6 +567,602 @@ export function calculateRiskAdjustedReturns(
 }
 
 // =============================================================================
+// MONTHLY RETURNS / 月度收益
+// =============================================================================
+
+/**
+ * Monthly return entry
+ * 月度收益条目
+ */
+export interface MonthlyReturnEntry {
+  year: number;
+  month: number;
+  label: string; // e.g., "2024-01"
+  returnPct: number;
+  isPositive: boolean;
+}
+
+/**
+ * Calculate monthly returns from daily equity curve
+ * 从每日净值曲线计算月度收益
+ *
+ * @param equityCurve - Array of {date, equity} objects
+ * @returns Array of monthly return entries
+ */
+export function calculateMonthlyReturns(
+  equityCurve: Array<{ date: string; equity: number }>,
+): MonthlyReturnEntry[] {
+  if (equityCurve.length < 2) return [];
+
+  const monthlyData = new Map<
+    string,
+    { firstEquity: number; lastEquity: number; year: number; month: number }
+  >();
+
+  for (const point of equityCurve) {
+    const date = new Date(point.date);
+    const year = date.getFullYear();
+    const month = date.getMonth() + 1;
+    const key = `${year}-${month.toString().padStart(2, "0")}`;
+
+    const existing = monthlyData.get(key);
+    if (!existing) {
+      monthlyData.set(key, {
+        firstEquity: point.equity,
+        lastEquity: point.equity,
+        year,
+        month,
+      });
+    } else {
+      existing.lastEquity = point.equity;
+    }
+  }
+
+  const result: MonthlyReturnEntry[] = [];
+  monthlyData.forEach((data, label) => {
+    const returnPct =
+      ((data.lastEquity - data.firstEquity) / data.firstEquity) * 100;
+    result.push({
+      year: data.year,
+      month: data.month,
+      label,
+      returnPct: roundReturnPct(returnPct),
+      isPositive: returnPct > 0,
+    });
+  });
+
+  return result.sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/**
+ * Calculate monthly return statistics
+ * 计算月度收益统计
+ */
+export function calculateMonthlyStats(monthlyReturns: MonthlyReturnEntry[]): {
+  avgMonthlyReturn: number;
+  bestMonth: MonthlyReturnEntry | null;
+  worstMonth: MonthlyReturnEntry | null;
+  positiveMonths: number;
+  negativeMonths: number;
+  monthlyWinRate: number;
+} {
+  if (monthlyReturns.length === 0) {
+    return {
+      avgMonthlyReturn: 0,
+      bestMonth: null,
+      worstMonth: null,
+      positiveMonths: 0,
+      negativeMonths: 0,
+      monthlyWinRate: 0,
+    };
+  }
+
+  const returns = monthlyReturns.map((m) => m.returnPct);
+  const positiveMonths = monthlyReturns.filter((m) => m.isPositive).length;
+  const negativeMonths = monthlyReturns.filter((m) => !m.isPositive).length;
+
+  const sortedByReturn = [...monthlyReturns].sort(
+    (a, b) => b.returnPct - a.returnPct,
+  );
+
+  return {
+    avgMonthlyReturn: roundReturnPct(average(returns)),
+    bestMonth: sortedByReturn[0] || null,
+    worstMonth: sortedByReturn[sortedByReturn.length - 1] || null,
+    positiveMonths,
+    negativeMonths,
+    monthlyWinRate: roundPercentage(
+      (positiveMonths / monthlyReturns.length) * 100,
+    ),
+  };
+}
+
+// =============================================================================
+// DRAWDOWN ANALYSIS / 回撤分析
+// =============================================================================
+
+/**
+ * Drawdown period info
+ * 回撤区间信息
+ */
+export interface DrawdownPeriod {
+  startDate: string;
+  endDate: string;
+  troughDate: string;
+  recoveryDate: string | null;
+  maxDrawdown: number;
+  durationDays: number;
+  recoveryDays: number | null;
+  isRecovered: boolean;
+}
+
+/**
+ * Calculate detailed drawdown analysis
+ * 计算详细的回撤分析
+ *
+ * @param equityCurve - Array of {date, equity} objects
+ * @returns Drawdown analysis results
+ */
+export function calculateDrawdownAnalysis(
+  equityCurve: Array<{ date: string; equity: number }>,
+): {
+  maxDrawdown: number;
+  maxDrawdownDuration: number;
+  avgDrawdown: number;
+  drawdownPeriods: DrawdownPeriod[];
+  currentDrawdown: number;
+  recoveryFactor: number;
+} {
+  if (equityCurve.length < 2) {
+    return {
+      maxDrawdown: 0,
+      maxDrawdownDuration: 0,
+      avgDrawdown: 0,
+      drawdownPeriods: [],
+      currentDrawdown: 0,
+      recoveryFactor: 0,
+    };
+  }
+
+  let peak = equityCurve[0]!.equity;
+  let peakDate = equityCurve[0]!.date;
+  let maxDrawdown = 0;
+  let maxDrawdownDuration = 0;
+
+  const drawdowns: number[] = [];
+  const periods: DrawdownPeriod[] = [];
+  let currentPeriod: Partial<DrawdownPeriod> | null = null;
+
+  for (let i = 0; i < equityCurve.length; i++) {
+    const point = equityCurve[i]!;
+    const drawdown = ((peak - point.equity) / peak) * 100;
+
+    drawdowns.push(drawdown);
+
+    if (point.equity > peak) {
+      // New peak reached, close any open drawdown period
+      if (currentPeriod && currentPeriod.startDate) {
+        currentPeriod.recoveryDate = point.date;
+        currentPeriod.isRecovered = true;
+        currentPeriod.recoveryDays = Math.round(
+          (new Date(point.date).getTime() -
+            new Date(currentPeriod.troughDate!).getTime()) /
+            (1000 * 60 * 60 * 24),
+        );
+        periods.push(currentPeriod as DrawdownPeriod);
+        currentPeriod = null;
+      }
+      peak = point.equity;
+      peakDate = point.date;
+    } else if (drawdown > 0) {
+      // In drawdown
+      if (!currentPeriod) {
+        currentPeriod = {
+          startDate: peakDate,
+          troughDate: point.date,
+          maxDrawdown: drawdown,
+          durationDays: 0,
+          isRecovered: false,
+        };
+      }
+
+      if (drawdown > currentPeriod.maxDrawdown!) {
+        currentPeriod.maxDrawdown = drawdown;
+        currentPeriod.troughDate = point.date;
+      }
+
+      currentPeriod.endDate = point.date;
+      currentPeriod.durationDays = Math.round(
+        (new Date(point.date).getTime() -
+          new Date(currentPeriod.startDate!).getTime()) /
+          (1000 * 60 * 60 * 24),
+      );
+
+      if (drawdown > maxDrawdown) {
+        maxDrawdown = drawdown;
+        maxDrawdownDuration = currentPeriod.durationDays;
+      }
+    }
+  }
+
+  // Handle unclosed period
+  if (currentPeriod && currentPeriod.startDate) {
+    currentPeriod.recoveryDate = null;
+    currentPeriod.recoveryDays = null;
+    periods.push(currentPeriod as DrawdownPeriod);
+  }
+
+  const lastPoint = equityCurve[equityCurve.length - 1]!;
+  const currentDrawdown = ((peak - lastPoint.equity) / peak) * 100;
+
+  // Recovery factor = total return / max drawdown
+  const totalReturn =
+    ((lastPoint.equity - equityCurve[0]!.equity) / equityCurve[0]!.equity) *
+    100;
+  const recoveryFactor =
+    maxDrawdown > 0
+      ? totalReturn / maxDrawdown
+      : totalReturn > 0
+        ? Infinity
+        : 0;
+
+  return {
+    maxDrawdown: roundReturnPct(maxDrawdown),
+    maxDrawdownDuration,
+    avgDrawdown: roundReturnPct(average(drawdowns)),
+    drawdownPeriods: periods.map((p) => ({
+      ...p,
+      maxDrawdown: roundReturnPct(p.maxDrawdown),
+    })),
+    currentDrawdown: roundReturnPct(currentDrawdown),
+    recoveryFactor: roundRatio(recoveryFactor),
+  };
+}
+
+// =============================================================================
+// VALUE AT RISK (VaR) / 风险价值
+// =============================================================================
+
+/**
+ * Calculate Value at Risk (VaR)
+ * 计算风险价值
+ *
+ * @param returns - Array of returns (percentages)
+ * @param confidenceLevel - Confidence level (e.g., 0.95 for 95%)
+ * @returns VaR value (positive number representing potential loss)
+ */
+export function calculateVaR(
+  returns: number[],
+  confidenceLevel: number = 0.95,
+): number {
+  if (returns.length === 0) return 0;
+
+  const sorted = [...returns].sort((a, b) => a - b);
+  const index = Math.floor((1 - confidenceLevel) * sorted.length);
+  const varValue = sorted[index] ?? sorted[0] ?? 0;
+
+  return roundReturnPct(Math.abs(Math.min(0, varValue)));
+}
+
+/**
+ * Calculate Conditional VaR (CVaR / Expected Shortfall)
+ * 计算条件风险价值
+ *
+ * @param returns - Array of returns (percentages)
+ * @param confidenceLevel - Confidence level (e.g., 0.95 for 95%)
+ * @returns CVaR value
+ */
+export function calculateCVaR(
+  returns: number[],
+  confidenceLevel: number = 0.95,
+): number {
+  if (returns.length === 0) return 0;
+
+  const sorted = [...returns].sort((a, b) => a - b);
+  const cutoffIndex = Math.floor((1 - confidenceLevel) * sorted.length);
+  const tailReturns = sorted.slice(0, cutoffIndex + 1);
+
+  if (tailReturns.length === 0) return 0;
+
+  const avgTailLoss = average(tailReturns);
+  return roundReturnPct(Math.abs(Math.min(0, avgTailLoss)));
+}
+
+// =============================================================================
+// ANNUALIZED CALCULATIONS / 年化计算
+// =============================================================================
+
+/**
+ * Annualize return based on trading days
+ * 根据交易天数年化收益
+ *
+ * @param totalReturn - Total return (as decimal, e.g., 0.15 for 15%)
+ * @param tradingDays - Number of trading days
+ * @param annualTradingDays - Trading days per year (default: 252)
+ * @returns Annualized return
+ */
+export function annualizeReturn(
+  totalReturn: number,
+  tradingDays: number,
+  annualTradingDays: number = 252,
+): number {
+  if (tradingDays <= 0) return 0;
+
+  const years = tradingDays / annualTradingDays;
+  if (years <= 0) return 0;
+
+  // Handle negative returns
+  if (totalReturn <= -1) return -1; // Cap at -100%
+
+  // Annualized return formula: (1 + total_return)^(1/years) - 1
+  const annualized = Math.pow(1 + totalReturn, 1 / years) - 1;
+  return roundReturnPct(annualized * 100);
+}
+
+/**
+ * Annualize volatility
+ * 年化波动率
+ *
+ * @param dailyReturns - Array of daily returns (percentages)
+ * @param annualTradingDays - Trading days per year (default: 252)
+ * @returns Annualized volatility
+ */
+export function annualizeVolatility(
+  dailyReturns: number[],
+  annualTradingDays: number = 252,
+): number {
+  if (dailyReturns.length === 0) return 0;
+
+  const dailyStdDev = standardDeviation(dailyReturns);
+  return roundReturnPct(dailyStdDev * Math.sqrt(annualTradingDays));
+}
+
+// =============================================================================
+// ENHANCED METRICS BUILDER / 增强指标构建器
+// =============================================================================
+
+import type { ReturnMetrics, RiskMetrics, TradingMetrics } from "./types";
+
+/**
+ * Build enhanced return metrics from equity curve and trades
+ * 从净值曲线和交易记录构建增强的收益指标
+ */
+export function buildReturnMetrics(
+  equityCurve: Array<{ date: string; equity: number }>,
+  benchmarkReturn?: number,
+): ReturnMetrics {
+  if (equityCurve.length < 2) {
+    return {
+      totalReturn: 0,
+      annualizedReturn: 0,
+      monthlyReturns: [],
+      alpha: undefined,
+      returnVolatility: 0,
+      bestMonth: undefined,
+      worstMonth: undefined,
+    };
+  }
+
+  const initialEquity = equityCurve[0]!.equity;
+  const finalEquity = equityCurve[equityCurve.length - 1]!.equity;
+  const totalReturn = (finalEquity - initialEquity) / initialEquity;
+
+  // Calculate trading days
+  const startDate = new Date(equityCurve[0]!.date);
+  const endDate = new Date(equityCurve[equityCurve.length - 1]!.date);
+  const calendarDays = Math.round(
+    (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+  );
+  const tradingDays = Math.round(calendarDays * (252 / 365));
+
+  // Monthly returns
+  const monthlyReturns = calculateMonthlyReturns(equityCurve);
+  const monthlyStats = calculateMonthlyStats(monthlyReturns);
+
+  // Daily returns for volatility
+  const dailyReturns: number[] = [];
+  for (let i = 1; i < equityCurve.length; i++) {
+    const prevEquity = equityCurve[i - 1]!.equity;
+    const currEquity = equityCurve[i]!.equity;
+    dailyReturns.push(((currEquity - prevEquity) / prevEquity) * 100);
+  }
+
+  return {
+    totalReturn: roundReturnPct(totalReturn * 100),
+    annualizedReturn: annualizeReturn(totalReturn, tradingDays),
+    monthlyReturns: monthlyReturns.map((m) => m.returnPct),
+    alpha:
+      benchmarkReturn !== undefined
+        ? roundReturnPct(totalReturn * 100 - benchmarkReturn)
+        : undefined,
+    returnVolatility: annualizeVolatility(dailyReturns) / 100,
+    bestMonth: monthlyStats.bestMonth?.returnPct,
+    worstMonth: monthlyStats.worstMonth?.returnPct,
+  };
+}
+
+/**
+ * Build enhanced risk metrics from equity curve
+ * 从净值曲线构建增强的风险指标
+ */
+export function buildRiskMetrics(
+  equityCurve: Array<{ date: string; equity: number }>,
+  riskFreeRate: number = 0.02,
+): RiskMetrics {
+  if (equityCurve.length < 2) {
+    return {
+      maxDrawdown: 0,
+      maxDrawdownDuration: 0,
+      sharpeRatio: 0,
+      sortinoRatio: 0,
+      calmarRatio: 0,
+    };
+  }
+
+  // Drawdown analysis
+  const drawdownAnalysis = calculateDrawdownAnalysis(equityCurve);
+
+  // Daily returns for Sharpe/Sortino
+  const dailyReturns: number[] = [];
+  for (let i = 1; i < equityCurve.length; i++) {
+    const prevEquity = equityCurve[i - 1]!.equity;
+    const currEquity = equityCurve[i]!.equity;
+    dailyReturns.push(((currEquity - prevEquity) / prevEquity) * 100);
+  }
+
+  // Annualized metrics
+  const avgDailyReturn = average(dailyReturns);
+  const annualizedReturn = avgDailyReturn * 252;
+  const annualizedVol = annualizeVolatility(dailyReturns);
+  const annualizedRiskFree = riskFreeRate * 100;
+
+  // Sharpe Ratio
+  const sharpeRatio =
+    annualizedVol > 0
+      ? (annualizedReturn - annualizedRiskFree) / annualizedVol
+      : 0;
+
+  // Sortino Ratio (downside deviation)
+  const negativeReturns = dailyReturns.filter((r) => r < 0);
+  const downsideVol = annualizeVolatility(negativeReturns);
+  const sortinoRatio =
+    downsideVol > 0
+      ? (annualizedReturn - annualizedRiskFree) / downsideVol
+      : annualizedReturn > annualizedRiskFree
+        ? Infinity
+        : 0;
+
+  // Calmar Ratio
+  const calmarRatio =
+    drawdownAnalysis.maxDrawdown > 0
+      ? annualizedReturn / drawdownAnalysis.maxDrawdown
+      : annualizedReturn > 0
+        ? Infinity
+        : 0;
+
+  // VaR and CVaR
+  const var95 = calculateVaR(dailyReturns, 0.95);
+  const var99 = calculateVaR(dailyReturns, 0.99);
+  const cvar = calculateCVaR(dailyReturns, 0.95);
+
+  return {
+    maxDrawdown: drawdownAnalysis.maxDrawdown,
+    maxDrawdownDuration: drawdownAnalysis.maxDrawdownDuration,
+    drawdownRecoveryDays:
+      drawdownAnalysis.drawdownPeriods.find(
+        (p) => p.maxDrawdown === drawdownAnalysis.maxDrawdown,
+      )?.recoveryDays ?? undefined,
+    sharpeRatio: roundRatio(sharpeRatio),
+    sortinoRatio: roundRatio(Math.min(sortinoRatio, 10)), // Cap at 10
+    calmarRatio: roundRatio(Math.min(calmarRatio, 10)), // Cap at 10
+    var95,
+    var99,
+    cvar,
+  };
+}
+
+/**
+ * Build enhanced trading metrics from trades
+ * 从交易记录构建增强的交易指标
+ */
+export function buildTradingMetrics(
+  trades: Array<{
+    type: "buy" | "sell";
+    pnl?: number;
+    pnlPercent?: number;
+    holdingDays?: number;
+    timestamp?: number;
+    date?: string;
+  }>,
+  tradingDays: number,
+): TradingMetrics {
+  // Filter to sell trades (completed round-trips)
+  const completedTrades = trades.filter(
+    (t) => t.type === "sell" && t.pnlPercent !== undefined,
+  );
+
+  if (completedTrades.length === 0) {
+    return {
+      totalTrades: 0,
+      winningTrades: 0,
+      losingTrades: 0,
+      winRate: 0,
+      profitFactor: 0,
+      avgWin: 0,
+      avgLoss: 0,
+      avgHoldingDays: 0,
+      maxConsecutiveWins: 0,
+      maxConsecutiveLosses: 0,
+      maxSingleWin: 0,
+      maxSingleLoss: 0,
+      tradingFrequency: 0,
+    };
+  }
+
+  const wins = completedTrades.filter((t) => (t.pnlPercent ?? 0) > 0);
+  const losses = completedTrades.filter((t) => (t.pnlPercent ?? 0) <= 0);
+
+  const winReturns = wins.map((t) => t.pnlPercent ?? 0);
+  const lossReturns = losses.map((t) => Math.abs(t.pnlPercent ?? 0));
+
+  const totalWin = sum(winReturns);
+  const totalLoss = sum(lossReturns);
+
+  // Consecutive wins/losses
+  let maxConsecWins = 0;
+  let maxConsecLosses = 0;
+  let currentWins = 0;
+  let currentLosses = 0;
+
+  for (const trade of completedTrades) {
+    if ((trade.pnlPercent ?? 0) > 0) {
+      currentWins++;
+      currentLosses = 0;
+      maxConsecWins = Math.max(maxConsecWins, currentWins);
+    } else {
+      currentLosses++;
+      currentWins = 0;
+      maxConsecLosses = Math.max(maxConsecLosses, currentLosses);
+    }
+  }
+
+  // Holding days
+  const holdingDays = completedTrades
+    .filter((t) => t.holdingDays !== undefined)
+    .map((t) => t.holdingDays!);
+
+  // Trading frequency (trades per month)
+  const months = tradingDays / 21; // ~21 trading days per month
+  const tradingFrequency =
+    months > 0 ? completedTrades.length / months : completedTrades.length;
+
+  return {
+    totalTrades: completedTrades.length,
+    winningTrades: wins.length,
+    losingTrades: losses.length,
+    winRate: roundPercentage((wins.length / completedTrades.length) * 100),
+    profitFactor: roundRatio(
+      totalLoss > 0 ? totalWin / totalLoss : totalWin > 0 ? Infinity : 0,
+    ),
+    avgWin: roundReturnPct(winReturns.length > 0 ? average(winReturns) : 0),
+    avgLoss: roundReturnPct(lossReturns.length > 0 ? -average(lossReturns) : 0),
+    avgHoldingDays: roundTo(
+      holdingDays.length > 0 ? average(holdingDays) : 0,
+      1,
+    ),
+    maxConsecutiveWins: maxConsecWins,
+    maxConsecutiveLosses: maxConsecLosses,
+    maxSingleWin: roundReturnPct(
+      winReturns.length > 0 ? Math.max(...winReturns) : 0,
+    ),
+    maxSingleLoss: roundReturnPct(
+      lossReturns.length > 0 ? -Math.max(...lossReturns) : 0,
+    ),
+    tradingFrequency: roundTo(tradingFrequency, 1),
+  };
+}
+
+// =============================================================================
 // BENCHMARK COMPARISON / 基准对比
 // =============================================================================
 

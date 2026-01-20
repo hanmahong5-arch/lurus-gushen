@@ -585,9 +585,10 @@ export default function TradingPage() {
                 <div className="text-xs text-white/50 mb-2">快捷访问</div>
                 <div className="space-y-1">
                   {[
-                    { symbol: "000001", name: "上证指数", type: "index" },
-                    { symbol: "399001", name: "深证成指", type: "index" },
-                    { symbol: "399006", name: "创业板指", type: "index" },
+                    // Use unique identifiers matching symbol-selector.tsx
+                    { symbol: "sh000001", name: "上证指数", type: "index" },
+                    { symbol: "sz399001", name: "深证成指", type: "index" },
+                    { symbol: "sz399006", name: "创业板指", type: "index" },
                   ].map((item) => (
                     <button
                       key={item.symbol}

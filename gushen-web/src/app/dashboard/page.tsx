@@ -6,6 +6,7 @@ import { StrategyInput } from "@/components/strategy-editor/strategy-input";
 import { CodePreview } from "@/components/strategy-editor/code-preview";
 import { BacktestPanel } from "@/components/strategy-editor/backtest-panel";
 import { StrategyTemplateList } from "@/components/strategy-editor/strategy-templates";
+import { ParameterEditor } from "@/components/strategy-editor/parameter-editor";
 
 export default function DashboardPage() {
   const [generatedCode, setGeneratedCode] = useState("");
@@ -13,9 +14,15 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
   const [strategyInputValue, setStrategyInputValue] = useState("");
 
+  // Track if backtest is running
+  const [isBacktesting, setIsBacktesting] = useState(false);
+
   // Ref to StrategyInput for focusing after template selection
   // 用于模板选择后聚焦到输入框
   const strategyInputRef = useRef<HTMLDivElement>(null);
+
+  // Ref for backtest panel to trigger rerun
+  const backtestPanelRef = useRef<{ runBacktest: () => void } | null>(null);
 
   const handleGenerate = useCallback(async (prompt: string) => {
     setIsGenerating(true);
@@ -79,6 +86,28 @@ export default function DashboardPage() {
     });
   }, []);
 
+  // Handle code update from parameter editor
+  // 处理参数编辑器的代码更新
+  const handleCodeUpdate = useCallback((newCode: string) => {
+    setGeneratedCode(newCode);
+  }, []);
+
+  // Handle rerun backtest request
+  // 处理重新回测请求
+  const handleRerunBacktest = useCallback(() => {
+    backtestPanelRef.current?.runBacktest();
+  }, []);
+
+  // Handle backtest state changes
+  // 处理回测状态变化
+  const handleBacktestStart = useCallback(() => {
+    setIsBacktesting(true);
+  }, []);
+
+  const handleBacktestEnd = useCallback(() => {
+    setIsBacktesting(false);
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -100,6 +129,12 @@ export default function DashboardPage() {
                 className="text-accent text-sm font-medium"
               >
                 策略编辑器
+              </Link>
+              <Link
+                href="/dashboard/strategy-validation"
+                className="text-white/60 hover:text-white text-sm transition"
+              >
+                策略验证
               </Link>
               <Link
                 href="/dashboard/advisor"
@@ -142,7 +177,8 @@ export default function DashboardPage() {
             </span>
           </h1>
           <p className="text-white/60">
-            用自然语言描述你的交易策略，AI 将自动生成可执行的 VeighNa 策略代码
+            用自然语言描述你的交易策略，AI 将自动生成可执行的 VeighNa
+            策略代码，支持参数微调和回测验证
           </p>
         </div>
 
@@ -155,9 +191,9 @@ export default function DashboardPage() {
           </div>
         )}
 
-        {/* Editor grid */}
-        <div className="grid lg:grid-cols-2 gap-6">
-          {/* Left column - Input and results */}
+        {/* Editor grid - 3 columns on large screens */}
+        <div className="grid lg:grid-cols-3 gap-6">
+          {/* Left column - Input */}
           <div className="space-y-6" ref={strategyInputRef}>
             <StrategyInput
               onGenerate={handleGenerate}
@@ -165,12 +201,30 @@ export default function DashboardPage() {
               value={strategyInputValue}
               onChange={setStrategyInputValue}
             />
-            <BacktestPanel strategyCode={generatedCode} />
+
+            {/* Parameter Editor - shows when code is generated */}
+            {generatedCode && (
+              <ParameterEditor
+                code={generatedCode}
+                onCodeUpdate={handleCodeUpdate}
+                onRerunBacktest={handleRerunBacktest}
+                isBacktesting={isBacktesting}
+              />
+            )}
           </div>
 
-          {/* Right column - Code preview */}
+          {/* Middle column - Code preview */}
           <div>
             <CodePreview code={generatedCode} isLoading={isGenerating} />
+          </div>
+
+          {/* Right column - Backtest */}
+          <div>
+            <BacktestPanel
+              strategyCode={generatedCode}
+              onBacktestStart={handleBacktestStart}
+              onBacktestEnd={handleBacktestEnd}
+            />
           </div>
         </div>
 
@@ -184,21 +238,27 @@ export default function DashboardPage() {
           <h3 className="text-sm font-medium text-accent mb-3">
             💡 使用指南 / Usage Guide
           </h3>
-          <div className="grid md:grid-cols-2 gap-4 text-sm text-white/60">
+          <div className="grid md:grid-cols-3 gap-4 text-sm text-white/60">
             <div className="space-y-2">
               <h4 className="text-white/80 font-medium">📝 描述策略</h4>
               <ul className="space-y-1 pl-4">
                 <li>• 使用具体的技术指标名称：均线、RSI、MACD、布林带等</li>
                 <li>• 明确买入/卖出条件和触发时机</li>
                 <li>• 指定参数范围：周期、阈值、止损比例</li>
-                <li>• 可以组合多个指标形成复合条件</li>
               </ul>
             </div>
             <div className="space-y-2">
-              <h4 className="text-white/80 font-medium">⚙️ 生成与回测</h4>
+              <h4 className="text-white/80 font-medium">⚙️ 参数调优</h4>
               <ul className="space-y-1 pl-4">
-                <li>• 生成代码基于 VeighNa 框架，可直接实盘</li>
-                <li>• 回测使用历史数据验证策略效果</li>
+                <li>• 生成代码后可视化编辑参数</li>
+                <li>• 实时预览参数变化对代码的影响</li>
+                <li>• 支持快速重新回测验证效果</li>
+              </ul>
+            </div>
+            <div className="space-y-2">
+              <h4 className="text-white/80 font-medium">📊 回测验证</h4>
+              <ul className="space-y-1 pl-4">
+                <li>• 选择不同时间周期和日期范围</li>
                 <li>• 关注夏普比率、最大回撤等风险指标</li>
                 <li>• 实盘前建议多周期、多品种测试</li>
               </ul>

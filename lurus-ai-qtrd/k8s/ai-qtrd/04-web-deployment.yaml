@@ -1,7 +1,7 @@
 # ============================================
 # AI-QTRD Web Frontend Deployment
 # Next.js Application for Gushen
-# Phase 7: Backtest records fix + Strategy template upgrade
+# Phase 8.5: Agentic Investment Advisor Architecture
 # ============================================
 apiVersion: apps/v1
 kind: Deployment
@@ -34,7 +34,7 @@ spec:
 
       containers:
         - name: web
-          image: gushen-web:v13
+          image: gushen-web:v14-new
           imagePullPolicy: Never # Use local image imported to containerd
           ports:
             - containerPort: 3000

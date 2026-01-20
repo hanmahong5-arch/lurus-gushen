@@ -1,15 +1,27 @@
 /**
- * Investment Advisor Chat API Route
- * 投资顾问对话 API 路由
+ * Investment Advisor Chat API Route (Enhanced)
+ * 投资顾问对话 API 路由 (增强版)
  *
- * Implements the 3-Dao 6-Shu investment decision framework
- * 实现三道六术投资决策框架
+ * Implements multi-agent architecture with:
+ * - Dynamic philosophy-based context loading
+ * - Multiple analysis modes (quick, deep, debate, diagnose)
+ * - Master investor perspectives
+ * - Token budget management
  *
- * Supports both streaming and non-streaming responses
- * 支持流式和非流式响应
+ * Reference: ai-hedge-fund, TradingAgents (UCLA)
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import type { AdvisorContext, ChatMode } from "@/lib/advisor/agent/types";
+import {
+  buildAdvisorSystemPrompt,
+  normalizeContext,
+} from "@/lib/advisor/context-builder";
+import {
+  selectAgents,
+  buildAgentPrompt,
+} from "@/lib/advisor/agent/agent-orchestrator";
+import { recommendAnalyst } from "@/lib/advisor/agent/analyst-agents";
 import { INVESTMENT_ADVISOR_SYSTEM_PROMPT } from "@/lib/investment-context/conversation-templates";
 
 // lurus-api configuration
@@ -25,42 +37,81 @@ interface ChatMessage {
   content: string;
 }
 
-// Request body interface
-// 请求体接口
+// Enhanced request body interface
+// 增强的请求体接口
 interface AdvisorChatRequest {
   message: string;
   history?: ChatMessage[];
-  mode?: "standard" | "quick" | "deep";
-  stream?: boolean; // Enable streaming response / 启用流式响应
+  mode?: ChatMode;
+  stream?: boolean;
+
+  // New: Advisor context for philosophy-based analysis
+  // 新增: 用于基于流派分析的顾问上下文
+  advisorContext?: Partial<AdvisorContext>;
+
+  // Legacy context (kept for backward compatibility)
+  // 旧版上下文 (保持向后兼容)
   context?: {
     symbol?: string;
+    symbolName?: string;
     sector?: string;
     timeframe?: string;
     riskTolerance?: string;
+    marketData?: string;
   };
 }
 
 /**
- * Build contextual system prompt based on request parameters
- * 根据请求参数构建上下文系统提示词
+ * Build system prompt based on advisor context or legacy context
+ * 根据顾问上下文或旧版上下文构建系统提示词
  */
-function buildSystemPrompt(context?: AdvisorChatRequest["context"]): string {
+function buildSystemPrompt(
+  advisorContext: Partial<AdvisorContext> | undefined,
+  legacyContext: AdvisorChatRequest["context"],
+  mode: ChatMode,
+): string {
+  // If advisor context is provided, use new dynamic context builder
+  // 如果提供了顾问上下文，使用新的动态上下文构建器
+  if (advisorContext) {
+    const normalizedContext = normalizeContext(advisorContext);
+    const built = buildAdvisorSystemPrompt(normalizedContext, mode, {
+      stockSymbol: legacyContext?.symbol,
+      stockName: legacyContext?.symbolName,
+      marketData: legacyContext?.marketData,
+    });
+
+    console.log(
+      `[Advisor API] Built dynamic context with ${built.includedSections.length} sections, ~${built.tokenBudget.total} tokens`,
+    );
+
+    return built.systemPrompt;
+  }
+
+  // Fallback to legacy system prompt
+  // 回退到旧版系统提示词
   let prompt = INVESTMENT_ADVISOR_SYSTEM_PROMPT;
 
-  if (context) {
+  if (legacyContext) {
     const contextAdditions: string[] = [];
 
-    if (context.symbol) {
-      contextAdditions.push(`当前用户关注的标的：${context.symbol}`);
+    if (legacyContext.symbol) {
+      contextAdditions.push(
+        `当前用户关注的标的：${legacyContext.symbolName || legacyContext.symbol}`,
+      );
     }
-    if (context.sector) {
-      contextAdditions.push(`当前关注的行业板块：${context.sector}`);
+    if (legacyContext.sector) {
+      contextAdditions.push(`当前关注的行业板块：${legacyContext.sector}`);
     }
-    if (context.timeframe) {
-      contextAdditions.push(`用户的投资时间框架：${context.timeframe}`);
+    if (legacyContext.timeframe) {
+      contextAdditions.push(`用户的投资时间框架：${legacyContext.timeframe}`);
     }
-    if (context.riskTolerance) {
-      contextAdditions.push(`用户的风险承受能力：${context.riskTolerance}`);
+    if (legacyContext.riskTolerance) {
+      contextAdditions.push(
+        `用户的风险承受能力：${legacyContext.riskTolerance}`,
+      );
+    }
+    if (legacyContext.marketData) {
+      contextAdditions.push(`\n## 当前市场数据\n${legacyContext.marketData}`);
     }
 
     if (contextAdditions.length > 0) {
@@ -72,11 +123,26 @@ function buildSystemPrompt(context?: AdvisorChatRequest["context"]): string {
 }
 
 /**
+ * Get temperature and max tokens based on mode
+ * 根据模式获取温度和最大 token 数
+ */
+function getModeConfig(mode: ChatMode): {
+  temperature: number;
+  maxTokens: number;
+} {
+  const configs: Record<ChatMode, { temperature: number; maxTokens: number }> =
+    {
+      quick: { temperature: 0.5, maxTokens: 1000 },
+      deep: { temperature: 0.3, maxTokens: 4000 },
+      debate: { temperature: 0.4, maxTokens: 3000 },
+      diagnose: { temperature: 0.3, maxTokens: 3000 },
+    };
+  return configs[mode] || configs.deep;
+}
+
+/**
  * POST handler for investment advisor chat
  * 投资顾问对话 POST 处理器
- *
- * Supports streaming when stream=true in request body
- * 当请求体中 stream=true 时支持流式响应
  */
 export async function POST(request: NextRequest) {
   try {
@@ -84,8 +150,9 @@ export async function POST(request: NextRequest) {
     const {
       message,
       history = [],
-      mode = "standard",
+      mode = "deep",
       stream = false,
+      advisorContext,
       context,
     } = body;
 
@@ -105,22 +172,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Build messages array with system prompt and history
-    // 构建包含系统提示词和历史的消息数组
-    const systemPrompt = buildSystemPrompt(context);
+    // Build system prompt with new or legacy context
+    // 使用新或旧上下文构建系统提示词
+    const systemPrompt = buildSystemPrompt(advisorContext, context, mode);
+
+    // Build messages array
+    // 构建消息数组
     const messages: ChatMessage[] = [
       { role: "system", content: systemPrompt },
-      ...history.slice(-10), // Keep last 10 messages to manage context length / 保留最近10条消息以管理上下文长度
+      ...history.slice(-10), // Keep last 10 messages / 保留最近10条消息
       { role: "user", content: message },
     ];
 
-    // Adjust temperature based on mode
-    // 根据模式调整温度
-    const temperature = mode === "quick" ? 0.5 : mode === "deep" ? 0.2 : 0.3;
-    const maxTokens = mode === "quick" ? 1000 : mode === "deep" ? 4000 : 2000;
+    // Get mode-specific configuration
+    // 获取模式特定配置
+    const { temperature, maxTokens } = getModeConfig(mode);
 
+    // Log request details
+    // 记录请求详情
+    const contextInfo = advisorContext
+      ? `philosophy=${advisorContext.corePhilosophy}, methods=${advisorContext.analysisMethods?.join(",")}`
+      : "legacy context";
     console.log(
-      `[Advisor API] Processing ${mode} mode request (stream: ${stream}), history: ${history.length} messages`,
+      `[Advisor API] Processing ${mode} mode request (stream: ${stream}), ${contextInfo}, history: ${history.length} messages`,
     );
     const startTime = Date.now();
 
@@ -210,6 +284,7 @@ export async function POST(request: NextRequest) {
           Connection: "keep-alive",
           "X-Response-Time": `${responseTime}ms`,
           "X-Mode": mode,
+          "X-Context-Type": advisorContext ? "agentic" : "legacy",
         },
       });
     }
@@ -239,6 +314,9 @@ export async function POST(request: NextRequest) {
         mode,
         responseTime,
         model: data.model,
+        contextType: advisorContext ? "agentic" : "legacy",
+        philosophy: advisorContext?.corePhilosophy,
+        masterAgent: advisorContext?.masterAgent,
       },
     });
   } catch (error) {
@@ -251,15 +329,58 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET handler - returns advisor capabilities and status
- * GET 处理器 - 返回顾问能力和状态
+ * GET handler - returns enhanced advisor capabilities
+ * GET 处理器 - 返回增强的顾问能力
  */
 export async function GET() {
   return NextResponse.json({
     name: "GuShen Investment Advisor",
-    version: "1.0.0",
-    framework: "3-Dao 6-Shu (三道六术)",
+    version: "2.0.0",
+    framework: "Agentic Multi-Philosophy System",
+    architecture: {
+      agents: {
+        analysts: ["Fundamentals", "Technical", "Sentiment", "Macro"],
+        researchers: ["Bull", "Bear", "Moderator"],
+        masters: ["Buffett", "Lynch", "Livermore", "Simons"],
+      },
+      philosophies: [
+        "value",
+        "growth",
+        "trend",
+        "quantitative",
+        "index",
+        "dividend",
+        "momentum",
+      ],
+      analysisMethods: [
+        "fundamental",
+        "technical",
+        "macro",
+        "behavioral",
+        "factor",
+      ],
+      tradingStyles: [
+        "scalping",
+        "day_trading",
+        "swing",
+        "position",
+        "buy_hold",
+      ],
+      specialtyStrategies: [
+        "san_dao_liu_shu",
+        "canslim",
+        "turtle",
+        "cycle",
+        "event_driven",
+      ],
+    },
     capabilities: [
+      "Multi-agent analysis (多Agent分析)",
+      "Philosophy-based context (流派上下文)",
+      "Bull vs Bear debate (多空辩论)",
+      "Master investor perspectives (大师视角)",
+      "Dynamic token management (动态Token管理)",
+      "Proactive alerts (主动预警)",
       "Individual stock analysis (个股分析)",
       "Sector rotation analysis (行业轮动分析)",
       "Market overview (市场概览)",
@@ -268,9 +389,10 @@ export async function GET() {
       "Entry/exit timing guidance (入场/出场时机指导)",
     ],
     modes: {
-      standard: "Balanced analysis with moderate depth",
-      quick: "Fast response for simple queries",
-      deep: "Comprehensive multi-dimensional analysis",
+      quick: "Fast response for simple queries (~1500 tokens)",
+      deep: "Comprehensive multi-dimensional analysis (~3000 tokens)",
+      debate: "Bull vs Bear balanced analysis (~4000 tokens)",
+      diagnose: "Portfolio multi-perspective diagnosis (~2500 tokens)",
     },
     status: "ready",
   });

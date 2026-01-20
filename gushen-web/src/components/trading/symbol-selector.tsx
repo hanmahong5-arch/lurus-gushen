@@ -57,16 +57,34 @@ export interface SymbolSelectorProps {
 
 /**
  * Popular A-share stocks for demo
+ * Note: Index symbols use special codes to avoid conflict with stock codes
+ * 上证指数实际代码为 000001.SH，但为避免与平安银行冲突，这里使用 sh000001
  */
 const DEFAULT_SYMBOLS: SymbolInfo[] = [
-  // 上证指数
+  // 上证指数 - Use unique identifier to avoid conflict with 平安银行 (000001.SZ)
   {
-    symbol: "000001",
+    symbol: "sh000001",
     name: "上证指数",
     market: "SH",
     type: "index",
-    price: 3150.5,
+    // Index shows point value, not price - no currency prefix needed
     changePercent: 0.85,
+  },
+  // 深证成指
+  {
+    symbol: "sz399001",
+    name: "深证成指",
+    market: "SZ",
+    type: "index",
+    changePercent: 1.12,
+  },
+  // 创业板指
+  {
+    symbol: "sz399006",
+    name: "创业板指",
+    market: "SZ",
+    type: "index",
+    changePercent: 1.45,
   },
   // 沪市大盘股
   {
@@ -275,7 +293,7 @@ export function SymbolSelector({
     const query = searchQuery.toUpperCase();
     const allSymbols = categories.flatMap((c) => c.symbols);
     const uniqueSymbols = Array.from(
-      new Map(allSymbols.map((s) => [`${s.market}${s.symbol}`, s])).values()
+      new Map(allSymbols.map((s) => [`${s.market}${s.symbol}`, s])).values(),
     );
 
     return uniqueSymbols.filter((symbol) => {
@@ -312,7 +330,7 @@ export function SymbolSelector({
       setIsOpen(false);
       setSearchQuery("");
     },
-    [onChange]
+    [onChange],
   );
 
   // Handle keyboard navigation
@@ -320,11 +338,15 @@ export function SymbolSelector({
     (e: React.KeyboardEvent) => {
       if (e.key === "Escape") {
         setIsOpen(false);
-      } else if (e.key === "Enter" && filteredSymbols && filteredSymbols.length > 0) {
+      } else if (
+        e.key === "Enter" &&
+        filteredSymbols &&
+        filteredSymbols.length > 0
+      ) {
         handleSelect(filteredSymbols[0]!);
       }
     },
-    [filteredSymbols, handleSelect]
+    [filteredSymbols, handleSelect],
   );
 
   // Format price change display
@@ -365,11 +387,15 @@ export function SymbolSelector({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {showQuote && selectedSymbol?.price && (
+          {showQuote && selectedSymbol && (
             <>
-              <span className="text-sm font-medium text-white">
-                ¥{selectedSymbol.price.toFixed(2)}
-              </span>
+              {selectedSymbol.price !== undefined && (
+                <span className="text-sm font-medium text-white">
+                  {selectedSymbol.type === "index"
+                    ? selectedSymbol.price.toFixed(2)
+                    : `¥${selectedSymbol.price.toFixed(2)}`}
+                </span>
+              )}
               {formatChange(selectedSymbol.changePercent)}
             </>
           )}
@@ -449,29 +475,30 @@ export function SymbolSelector({
                 {/* Symbol list */}
                 <div className="p-2">
                   {/* Recent symbols */}
-                  {recentSymbols.length > 0 && activeCategory === categories[0]?.id && (
-                    <div className="mb-2">
-                      <div className="px-2 py-1 text-xs text-white/40">
-                        最近浏览
+                  {recentSymbols.length > 0 &&
+                    activeCategory === categories[0]?.id && (
+                      <div className="mb-2">
+                        <div className="px-2 py-1 text-xs text-white/40">
+                          最近浏览
+                        </div>
+                        {recentSymbols.slice(0, 3).map((code) => {
+                          const info = DEFAULT_SYMBOLS.find(
+                            (s) => s.symbol === code,
+                          );
+                          if (!info) return null;
+                          return (
+                            <SymbolItem
+                              key={code}
+                              symbol={info}
+                              isSelected={code === value}
+                              showQuote={showQuote}
+                              onClick={() => handleSelect(info)}
+                            />
+                          );
+                        })}
+                        <div className="border-b border-border my-2" />
                       </div>
-                      {recentSymbols.slice(0, 3).map((code) => {
-                        const info = DEFAULT_SYMBOLS.find(
-                          (s) => s.symbol === code
-                        );
-                        if (!info) return null;
-                        return (
-                          <SymbolItem
-                            key={code}
-                            symbol={info}
-                            isSelected={code === value}
-                            showQuote={showQuote}
-                            onClick={() => handleSelect(info)}
-                          />
-                        );
-                      })}
-                      <div className="border-b border-border my-2" />
-                    </div>
-                  )}
+                    )}
 
                   {/* Category symbols */}
                   {categories
@@ -506,8 +533,24 @@ interface SymbolItemProps {
   onClick: () => void;
 }
 
-function SymbolItem({ symbol, isSelected, showQuote, onClick }: SymbolItemProps) {
+function SymbolItem({
+  symbol,
+  isSelected,
+  showQuote,
+  onClick,
+}: SymbolItemProps) {
   const isPositive = (symbol.changePercent ?? 0) >= 0;
+  const isIndex = symbol.type === "index";
+
+  // Format price display based on asset type
+  // Indices show point value without currency prefix
+  const formatPrice = (price: number | undefined) => {
+    if (price === undefined) return null;
+    if (isIndex) {
+      return price.toFixed(2); // No currency prefix for indices
+    }
+    return `¥${price.toFixed(2)}`;
+  };
 
   return (
     <button
@@ -516,7 +559,7 @@ function SymbolItem({ symbol, isSelected, showQuote, onClick }: SymbolItemProps)
         "w-full flex items-center justify-between p-2 rounded-lg transition",
         isSelected
           ? "bg-accent/10 border border-accent/30"
-          : "hover:bg-white/5"
+          : "hover:bg-white/5",
       )}
     >
       <div className="flex items-center gap-2">
@@ -534,21 +577,30 @@ function SymbolItem({ symbol, isSelected, showQuote, onClick }: SymbolItemProps)
                 ETF
               </span>
             )}
+            {isIndex && (
+              <span className="ml-1 px-1 py-0.5 bg-blue-500/20 text-blue-400 rounded text-[10px]">
+                指数
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      {showQuote && symbol.price !== undefined && (
+      {showQuote && (
         <div className="text-right">
-          <div className="text-sm font-medium text-white">
-            ¥{symbol.price.toFixed(2)}
-          </div>
-          <div
-            className={`text-xs ${isPositive ? "text-profit" : "text-loss"}`}
-          >
-            {isPositive ? "+" : ""}
-            {symbol.changePercent?.toFixed(2)}%
-          </div>
+          {symbol.price !== undefined && (
+            <div className="text-sm font-medium text-white">
+              {formatPrice(symbol.price)}
+            </div>
+          )}
+          {symbol.changePercent !== undefined && (
+            <div
+              className={`text-xs ${isPositive ? "text-profit" : "text-loss"}`}
+            >
+              {isPositive ? "+" : ""}
+              {symbol.changePercent.toFixed(2)}%
+            </div>
+          )}
         </div>
       )}
     </button>

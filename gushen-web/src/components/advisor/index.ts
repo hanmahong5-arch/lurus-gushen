@@ -1,7 +1,15 @@
 /**
- * Advisor Components Index
- * 顾问组件索引
+ * GuShen Advisor Components - Index
+ *
+ * Export all advisor-related UI components
  */
 
-export { AdvisorChat } from "./advisor-chat";
-export { default } from "./advisor-chat";
+export { PhilosophySelector } from "./philosophy-selector";
+export { AlertPanel, AlertBadge } from "./alert-panel";
+export { DebateView, DebateSummary } from "./debate-view";
+export { ModeSelector, CompactModeSelector, ModeBadge } from "./mode-selector";
+export {
+  MasterAgentCards,
+  MasterAgentPreview,
+  MasterQuote,
+} from "./master-agent-cards";

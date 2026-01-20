@@ -66,6 +66,10 @@ interface BacktestPanelProps {
   result?: BacktestResult;
   isRunning?: boolean;
   onRunBacktest?: (config: BacktestConfig) => Promise<void>;
+  /** Callback when backtest starts / 回测开始时的回调 */
+  onBacktestStart?: () => void;
+  /** Callback when backtest ends / 回测结束时的回调 */
+  onBacktestEnd?: () => void;
 }
 
 // =============================================================================
@@ -122,6 +126,8 @@ export function BacktestPanel({
   result: externalResult,
   isRunning: externalIsRunning = false,
   onRunBacktest,
+  onBacktestStart,
+  onBacktestEnd,
 }: BacktestPanelProps) {
   // Config state
   const defaultDates = getDefaultDates(365);
@@ -169,6 +175,7 @@ export function BacktestPanel({
 
     setIsRunning(true);
     setError(null);
+    onBacktestStart?.();
 
     try {
       if (onRunBacktest) {
@@ -201,8 +208,9 @@ export function BacktestPanel({
       );
     } finally {
       setIsRunning(false);
+      onBacktestEnd?.();
     }
-  }, [strategyCode, config, onRunBacktest]);
+  }, [strategyCode, config, onRunBacktest, onBacktestStart, onBacktestEnd]);
 
   /**
    * Export backtest report

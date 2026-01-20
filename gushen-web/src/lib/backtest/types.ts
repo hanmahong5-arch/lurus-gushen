@@ -285,6 +285,463 @@ export interface StrategySignal {
 }
 
 // =============================================================================
+// MULTI-LEVEL TARGET TYPES / 多层级标的类型
+// =============================================================================
+
+/**
+ * Backtest target mode
+ * 回测标的模式
+ */
+export type BacktestTargetMode = "sector" | "stock" | "portfolio";
+
+/**
+ * Sector filter configuration
+ * 板块过滤配置
+ */
+export interface SectorFilter {
+  minMarketCap?: number; // Minimum market cap in billions (最小市值，亿元)
+  maxMarketCap?: number; // Maximum market cap in billions (最大市值，亿元)
+  excludeST?: boolean; // Exclude ST stocks (排除ST股票)
+  excludeNew?: boolean; // Exclude stocks listed < 1 year (排除次新股)
+  minPrice?: number; // Minimum stock price (最小股价)
+  maxPrice?: number; // Maximum stock price (最大股价)
+}
+
+/**
+ * Sector target configuration
+ * 板块标的配置
+ */
+export interface SectorTarget {
+  code: string; // Sector code (板块代码)
+  name: string; // Sector name (板块名称)
+  type: "industry" | "concept"; // Sector type (板块类型)
+  stockCount?: number; // Number of constituent stocks (成分股数量)
+  filters?: SectorFilter; // Filter conditions (过滤条件)
+}
+
+/**
+ * Individual stock target configuration
+ * 个股标的配置
+ */
+export interface StockTarget {
+  symbol: string; // Stock code (股票代码)
+  name: string; // Stock name (股票名称)
+  market: "SH" | "SZ" | "BJ"; // Market (市场)
+}
+
+/**
+ * Portfolio stock with weight
+ * 组合中的股票（含权重）
+ */
+export interface PortfolioStock {
+  symbol: string;
+  name: string;
+  weight?: number; // Weight in portfolio (0-100, optional)
+}
+
+/**
+ * Portfolio target configuration
+ * 组合标的配置
+ */
+export interface PortfolioTarget {
+  id?: string; // Portfolio ID for saved portfolios
+  name: string; // Portfolio name
+  stocks: PortfolioStock[];
+}
+
+/**
+ * Unified backtest target selector
+ * 统一回测标的选择器
+ */
+export interface BacktestTarget {
+  mode: BacktestTargetMode;
+  sector?: SectorTarget;
+  stock?: StockTarget;
+  portfolio?: PortfolioTarget;
+}
+
+// =============================================================================
+// ENHANCED METRICS TYPES / 增强指标类型
+// =============================================================================
+
+/**
+ * Return metrics category
+ * 收益类指标
+ */
+export interface ReturnMetrics {
+  totalReturn: number; // Total return (总收益率)
+  annualizedReturn: number; // Annualized return (年化收益率)
+  monthlyReturns: number[]; // Monthly return array (月度收益数组)
+  alpha?: number; // Alpha vs benchmark (超额收益)
+  returnVolatility: number; // Return volatility (收益波动率)
+  bestMonth?: number; // Best monthly return (最佳月度收益)
+  worstMonth?: number; // Worst monthly return (最差月度收益)
+}
+
+/**
+ * Risk metrics category
+ * 风险类指标
+ */
+export interface RiskMetrics {
+  maxDrawdown: number; // Maximum drawdown (最大回撤)
+  maxDrawdownDuration: number; // Drawdown duration in days (回撤持续天数)
+  drawdownRecoveryDays?: number; // Days to recover from max drawdown (恢复天数)
+  sharpeRatio: number; // Sharpe ratio (夏普比率)
+  sortinoRatio: number; // Sortino ratio (索提诺比率)
+  calmarRatio: number; // Calmar ratio (卡玛比率)
+  var95?: number; // Value at Risk 95% (95% VaR)
+  var99?: number; // Value at Risk 99% (99% VaR)
+  cvar?: number; // Conditional VaR (条件VaR)
+  beta?: number; // Beta vs benchmark (贝塔)
+}
+
+/**
+ * Trading metrics category
+ * 交易类指标
+ */
+export interface TradingMetrics {
+  totalTrades: number; // Total number of trades (总交易次数)
+  winningTrades: number; // Number of winning trades (盈利次数)
+  losingTrades: number; // Number of losing trades (亏损次数)
+  winRate: number; // Win rate percentage (胜率)
+  profitFactor: number; // Profit factor / Payoff ratio (盈亏比)
+  avgWin: number; // Average winning trade (平均盈利)
+  avgLoss: number; // Average losing trade (平均亏损)
+  avgHoldingDays: number; // Average holding period (平均持仓天数)
+  maxConsecutiveWins: number; // Max consecutive wins (最大连胜)
+  maxConsecutiveLosses: number; // Max consecutive losses (最大连亏)
+  maxSingleWin: number; // Largest single win (最大单笔盈利)
+  maxSingleLoss: number; // Largest single loss (最大单笔亏损)
+  tradingFrequency: number; // Trades per month (月均交易次数)
+}
+
+/**
+ * Individual stock result in sector backtest
+ * 板块回测中的个股结果
+ */
+export interface StockBacktestResult {
+  symbol: string;
+  name: string;
+  totalReturn: number;
+  winRate: number;
+  tradeCount: number;
+  contribution: number; // Contribution to portfolio return (贡献度)
+  sharpeRatio: number;
+  maxDrawdown: number;
+}
+
+/**
+ * Sector-level aggregated result
+ * 板块级汇总结果
+ */
+export interface SectorAggregatedResult {
+  sectorCode: string;
+  sectorName: string;
+  stockCount: number;
+  backtestCount: number; // Stocks actually backtested
+
+  // Aggregated metrics
+  avgReturn: number;
+  medianReturn: number;
+  bestReturn: number;
+  worstReturn: number;
+  avgWinRate: number;
+  avgSharpeRatio: number;
+
+  // Stock rankings
+  stockResults: StockBacktestResult[];
+  topPerformers: StockBacktestResult[];
+  bottomPerformers: StockBacktestResult[];
+
+  // Benchmark comparison
+  benchmarkReturn?: number;
+  alphaVsBenchmark?: number;
+}
+
+// =============================================================================
+// DIAGNOSTIC SYSTEM TYPES / 诊断系统类型
+// =============================================================================
+
+/**
+ * Diagnostic severity level
+ * 诊断严重级别
+ */
+export type DiagnosticSeverity = "info" | "warning" | "error";
+
+/**
+ * Diagnostic result item
+ * 诊断结果项
+ */
+export interface DiagnosticItem {
+  id: string;
+  severity: DiagnosticSeverity;
+  message: string; // Chinese message
+  messageEn: string; // English message
+  currentValue: string; // Current value display
+  suggestion: string; // Improvement suggestion
+  relatedParams?: string[]; // Related strategy parameters
+}
+
+/**
+ * Strategy highlight (positive findings)
+ * 策略亮点
+ */
+export interface StrategyHighlight {
+  id: string;
+  message: string;
+  messageEn: string;
+  value: string;
+}
+
+/**
+ * Complete diagnostic report
+ * 完整诊断报告
+ */
+export interface DiagnosticReport {
+  timestamp: number;
+  issues: DiagnosticItem[];
+  highlights: StrategyHighlight[];
+  overallScore: number; // 0-100 overall health score
+  riskLevel: "low" | "medium" | "high";
+}
+
+// =============================================================================
+// SENSITIVITY ANALYSIS TYPES / 敏感性分析类型
+// =============================================================================
+
+/**
+ * Single parameter sensitivity test result
+ * 单参数敏感性测试结果
+ */
+export interface ParameterSensitivityPoint {
+  paramValue: number;
+  totalReturn: number;
+  sharpeRatio: number;
+  maxDrawdown: number;
+  winRate: number;
+}
+
+/**
+ * Single parameter sensitivity analysis result
+ * 单参数敏感性分析结果
+ */
+export interface SingleParameterSensitivity {
+  paramName: string;
+  paramLabel: string; // Display label (显示标签)
+  baseValue: number;
+  testRange: { min: number; max: number; step: number };
+  results: ParameterSensitivityPoint[];
+  optimalValue: number;
+  optimalReturn: number;
+  recommendation: string;
+  stabilityScore: number; // 0-100, higher = more stable
+}
+
+/**
+ * Dual parameter heatmap cell
+ * 双参数热力图单元格
+ */
+export interface HeatmapCell {
+  param1Value: number;
+  param2Value: number;
+  totalReturn: number;
+  isOptimal: boolean;
+}
+
+/**
+ * Dual parameter sensitivity analysis result
+ * 双参数敏感性分析结果
+ */
+export interface DualParameterSensitivity {
+  param1Name: string;
+  param1Label: string;
+  param1Values: number[];
+  param2Name: string;
+  param2Label: string;
+  param2Values: number[];
+  heatmapData: HeatmapCell[][];
+  optimalCombination: {
+    param1: number;
+    param2: number;
+    return: number;
+  };
+}
+
+/**
+ * Complete sensitivity analysis report
+ * 完整敏感性分析报告
+ */
+export interface SensitivityReport {
+  singleParams: SingleParameterSensitivity[];
+  dualParams?: DualParameterSensitivity;
+  overallRecommendation: string;
+  parameterStability: "stable" | "moderate" | "unstable";
+}
+
+// =============================================================================
+// UNIFIED BACKTEST REQUEST/RESPONSE / 统一回测请求响应
+// =============================================================================
+
+/**
+ * Strategy type for backtest
+ * 回测策略类型
+ */
+export type StrategyType = "builtin" | "custom" | "nlp";
+
+/**
+ * Unified backtest request
+ * 统一回测请求
+ */
+export interface UnifiedBacktestRequest {
+  // Target selection
+  target: BacktestTarget;
+
+  // Strategy configuration
+  strategy: {
+    type: StrategyType;
+    builtinId?: string; // e.g., "macd_golden_cross"
+    customCode?: string; // Custom strategy code
+    nlpDescription?: string; // Natural language description
+    params?: Record<string, number>; // Strategy parameters
+  };
+
+  // Backtest configuration
+  config: {
+    startDate: string;
+    endDate: string;
+    initialCapital: number;
+    holdingDays?: number;
+    commission?: number;
+    slippage?: number;
+    timeframe?: "1d" | "60m" | "30m" | "15m" | "5m";
+  };
+
+  // Advanced options
+  options?: {
+    includeTransactionCosts?: boolean;
+    calculateSensitivity?: boolean;
+    sensitivityParams?: Array<{
+      name: string;
+      values: number[];
+    }>;
+    includeDiagnostics?: boolean;
+    includeBenchmarkComparison?: boolean;
+    benchmarkSymbol?: string;
+  };
+}
+
+/**
+ * Backtest progress update (for WebSocket)
+ * 回测进度更新
+ */
+export interface BacktestProgress {
+  jobId: string;
+  status: "pending" | "running" | "completed" | "failed";
+  phase:
+    | "init"
+    | "fetching_data"
+    | "running_backtest"
+    | "calculating_stats"
+    | "generating_report";
+  progress: number; // 0-100
+  message?: string;
+  currentStock?: string;
+  currentStockIndex?: number;
+  totalStocks?: number;
+  partialResults?: Partial<UnifiedBacktestResult>;
+  error?: string;
+}
+
+/**
+ * Unified backtest result
+ * 统一回测结果
+ */
+export interface UnifiedBacktestResult {
+  // Job info
+  jobId: string;
+  timestamp: number;
+  executionTime: number;
+
+  // Target info
+  target: BacktestTarget;
+
+  // Aggregated metrics (4 categories)
+  returnMetrics: ReturnMetrics;
+  riskMetrics: RiskMetrics;
+  tradingMetrics: TradingMetrics;
+
+  // Equity curve
+  equityCurve: Array<{
+    date: string;
+    equity: number;
+    benchmark?: number;
+    drawdown: number;
+  }>;
+
+  // Mode-specific results
+  sectorResult?: SectorAggregatedResult; // For sector mode
+  stockResults?: StockBacktestResult[]; // For portfolio mode
+
+  // Detailed trades (for stock mode or drill-down)
+  trades?: DetailedTrade[];
+
+  // Diagnostics
+  diagnostics?: DiagnosticReport;
+
+  // Sensitivity analysis
+  sensitivity?: SensitivityReport;
+
+  // Configuration used
+  config: BacktestConfig;
+  strategy: ParsedStrategy;
+}
+
+// =============================================================================
+// COMPARISON TYPES / 对比类型
+// =============================================================================
+
+/**
+ * Backtest comparison item
+ * 回测对比项
+ */
+export interface ComparisonItem {
+  id: string;
+  name: string;
+  result: UnifiedBacktestResult;
+  color?: string; // For chart display
+}
+
+/**
+ * Metric comparison row
+ * 指标对比行
+ */
+export interface MetricComparison {
+  metricName: string;
+  metricLabel: string;
+  values: Array<{
+    itemId: string;
+    value: number | string;
+    isBest?: boolean;
+    isWorst?: boolean;
+  }>;
+}
+
+/**
+ * Complete comparison report
+ * 完整对比报告
+ */
+export interface ComparisonReport {
+  items: ComparisonItem[];
+  metricComparisons: MetricComparison[];
+  winner: {
+    byReturn: string;
+    byRisk: string;
+    bySharpRatio: string;
+    overall: string;
+  };
+}
+
+// =============================================================================
 // BACKWARD COMPATIBILITY / 向后兼容
 // =============================================================================
 

@@ -1134,6 +1134,362 @@ kubectl apply -f k8s/ai-qtrd/06-ingress-routes.yaml
 
 ---
 
+### 2026-01-20: 交易面板与投资顾问Bug修复
+
+**用户需求 User Request:**
+- 修复交易面板K线图切换周期后标的显示错误问题
+- 修复上证指数价格显示问题（指数不应显示货币符号¥）
+- 修复投资顾问多空辩论功能API报错问题
+
+**方法 Method:**
+- 分析代码定位bug根因
+- 统一指数标识符命名规范
+- 修复API字段名不匹配问题
+- 优化指数类型的价格显示逻辑
+
+**修改内容 Changes:**
+
+1. **`src/components/advisor/advisor-chat.tsx`** - 修复辩论API调用
+   - 修复字段名: `side` → `stance`
+   - 修复字段名: `round` → `currentRound`
+   - 添加缺失的必要字段: `symbol`, `symbolName`, `topic`
+   - 修复 conclusion 请求缺少 `bullArguments`, `bearArguments`
+   - 增加错误处理和日志记录
+
+2. **`src/components/trading/symbol-selector.tsx`** - 修复指数显示
+   - 修复上证指数symbol冲突: `"000001"` → `"sh000001"`
+   - 添加深证成指(`sz399001`)和创业板指(`sz399006`)
+   - 指数类型不显示价格（因为是点位而非价格）
+   - 添加指数类型标签显示
+   - `SymbolItem`组件: 指数不显示"¥"前缀
+
+3. **`src/app/dashboard/trading/page.tsx`** - 同步快捷访问代码
+   - 更新快捷访问指数代码与symbol-selector保持一致
+   - `"000001"` → `"sh000001"` (上证指数)
+   - `"399001"` → `"sz399001"` (深证成指)
+   - `"399006"` → `"sz399006"` (创业板指)
+
+**结果 Result:**
+- TypeScript类型检查通过 (0 errors)
+- 构建成功: 28个页面全部生成
+- 辩论API能够正确发送请求
+- 指数类型正确显示（无货币符号）
+- K线图切换周期功能正常工作
+
+**技术统计 / Technical Stats:**
+- 修改文件: 3 个
+- 修复Bug: 3 个
+- 新增代码: ~80 行
+
+**状态 Status:** ✅ 已完成 / Completed
+
+---
+
+## 2026-01-20: 部署 v14 到 K3s / Deploy v14 to K3s
+
+**用户需求 User Request:**
+- 将包含 Phase 8.5 Agentic 投资顾问架构的新版本部署到 K3s 集群
+
+**方法 Method:**
+- 在 master 节点 (cloud-ubuntu-1-16c32g) 构建 Docker 镜像
+- 传输镜像到 worker 节点 (cloud-ubuntu-3-2c2g)
+- 导入到 containerd (k8s.io namespace)
+- 更新 Deployment 使用新镜像
+
+**部署步骤 Deployment Steps:**
+
+1. **打包源代码 Package Source Code:**
+```bash
+# 本地 Windows
+tar --exclude='node_modules' --exclude='.next' --exclude='.git' \
+    -czvf gushen-web-v14.tar.gz gushen-web
+scp gushen-web-v14.tar.gz root@100.98.57.55:/root/
+```
+
+2. **构建 Docker 镜像 Build Docker Image:**
+```bash
+# master 节点
+cd /root/gushen-web
+docker build -t gushen-web:v14 .
+```
+
+3. **传输到 Worker 节点 Transfer to Worker:**
+```bash
+# master 节点
+docker save gushen-web:v14 -o /tmp/gushen-web-v14.tar
+sshpass -p "Lurus@ops" scp /tmp/gushen-web-v14.tar root@cloud-ubuntu-3-2c2g:/tmp/
+```
+
+4. **导入到 containerd Import to containerd:**
+```bash
+# worker 节点
+ctr -n k8s.io images import /tmp/gushen-web-v14.tar
+```
+
+5. **更新 Deployment Update Deployment:**
+```bash
+# master 节点
+kubectl set image deployment/ai-qtrd-web web=gushen-web:v14 -n ai-qtrd
+kubectl rollout status deployment/ai-qtrd-web -n ai-qtrd
+```
+
+**验证结果 Verification:**
+```bash
+# Pod 状态
+kubectl get pods -n ai-qtrd
+# ai-qtrd-web-554d698c9c-v9kd5   1/1     Running   0
+
+# HTTP 响应
+curl -sI https://gushen.lurus.cn/
+# HTTP/2 200
+```
+
+**镜像版本历史 Image Version History:**
+| 版本 | 日期 | 主要变更 |
+|------|------|---------|
+| v12 | 2026-01-19 | Phase 7 回测增强 |
+| v13 | 2026-01-20 | K线图/标签修复 |
+| v14 | 2026-01-20 | Phase 8.5 Agentic 投资顾问 |
+
+**新增功能 New Features in v14:**
+- Multi-Agent 架构 (11个 Agent)
+- 投资流派选择器 (21种组合)
+- Bull vs Bear 辩论模式
+- 大师视角快速切换
+- Token 预算管理
+- 预警系统
+
+**状态 Status:** ✅ 已完成 / Completed
+
+---
+
+## 2026-01-20: Phase 8.5 Agentic 投资顾问架构 / Agentic Investment Advisor Architecture
+
+**用户需求 User Request:**
+- 扩展投资流派体系，增强用户参与性和选择性
+- 实现预测系统 + 反应系统结合的 Agentic 架构
+- 参考 ai-hedge-fund (18k⭐), TradingAgents (UCLA), FinRobot (AI4Finance)
+- 多 Agent 协作：分析师、研究员、大师级投资者
+
+**方法 Method:**
+- 设计 Multi-Agent 架构：分析师团队、Bull/Bear 研究员、大师级投资者
+- 创建投资流派提示词库：7 核心流派 + 5 分析方法 + 5 交易风格 + 4 特色策略
+- 实现动态上下文构建器：Token 预算管理和分层加载
+- 创建预测系统：预警生成器
+- 创建反应系统：辩论引擎
+- 开发前端组件：流派选择器、预警面板、辩论视图等
+
+**新增内容 New Files:**
+
+**Agent 核心模块 Agent Core (~1500 lines):**
+1. `src/lib/advisor/agent/types.ts` (~300 lines) - Agent 类型定义
+   - InvestmentPhilosophy, AnalysisMethod, TradingStyle, SpecialtyStrategy 类型
+   - AgentRole, AnalystAgent, ResearcherAgent, MasterAgent 接口
+   - AdvisorContext, ChatMode, DebateSession, ProactiveAlert 类型
+   - TOKEN_LIMITS 常量: quick(1500), deep(3000), debate(4000), diagnose(2500)
+
+2. `src/lib/advisor/agent/analyst-agents.ts` (~250 lines) - 4 个分析师 Agent
+   - FUNDAMENTALS_ANALYST: 基本面分析师 (CFA资质，20年经验)
+   - TECHNICAL_ANALYST: 技术分析师 (CMT资质，图表解读)
+   - SENTIMENT_ANALYST: 情绪分析师 (市场情绪，资金流向)
+   - MACRO_ANALYST: 宏观分析师 (经济周期，政策解读)
+   - 辅助函数: getAnalystById, getAnalystsByMethod, recommendAnalyst
+
+3. `src/lib/advisor/agent/researcher-agents.ts` (~200 lines) - 研究员 Agent
+   - BULL_RESEARCHER: 多头研究员 (寻找投资机会)
+   - BEAR_RESEARCHER: 空头研究员 (评估风险，质疑假设)
+   - DEBATE_MODERATOR: 辩论主持人 (平衡观点，总结结论)
+   - 辅助函数: getDebateTeam, generateDebatePrompt, generateModeratorPrompt
+
+4. `src/lib/advisor/agent/master-agents.ts` (~420 lines) - 4 个大师级 Agent
+   - BUFFETT_AGENT: 巴菲特视角 (价值投资，护城河分析)
+   - LYNCH_AGENT: 彼得林奇视角 (成长投资，十倍股)
+   - LIVERMORE_AGENT: 利弗莫尔视角 (趋势跟踪，关键点)
+   - SIMONS_AGENT: 西蒙斯视角 (量化投资，数据驱动)
+   - 辅助函数: getMasterAgentById, getMasterAgentByPhilosophy, getMasterAgentSummaries
+
+5. `src/lib/advisor/agent/agent-orchestrator.ts` (~220 lines) - Agent 调度器
+   - selectAgents(): 根据模式和上下文选择 Agent
+   - getAllAgents(): 获取所有 Agent 列表
+   - calculateTokenBudget(): 计算 Token 预算
+   - buildAgentPrompt(): 构建 Agent 提示词
+   - buildDebatePrompt(): 构建辩论提示词
+   - createExecutionPlan(): 创建执行计划
+
+6. `src/lib/advisor/agent/index.ts` - Agent 模块导出
+
+**流派提示词库 Philosophy Library (~550 lines):**
+7. `src/lib/advisor/philosophies/index.ts` - 投资流派定义
+   - PHILOSOPHY_DEFINITIONS: 7 核心流派
+     - value: 价值投资 (格雷厄姆，巴菲特)
+     - growth: 成长投资 (费舍，林奇)
+     - trend: 趋势跟踪 (利弗莫尔)
+     - quantitative: 量化投资 (西蒙斯)
+     - index: 指数投资 (博格)
+     - dividend: 股息投资
+     - momentum: 动量投资
+   - ANALYSIS_METHOD_DEFINITIONS: 5 分析方法
+     - fundamental, technical, macro, behavioral, factor
+   - TRADING_STYLE_DEFINITIONS: 5 交易风格
+     - scalping, day_trading, swing, position, buy_hold
+   - SPECIALTY_STRATEGY_DEFINITIONS: 4 特色策略
+     - san_dao_liu_shu (三道六术), canslim, turtle, cycle
+
+**动态上下文构建器 Context Builder (~250 lines):**
+8. `src/lib/advisor/context-builder.ts`
+   - buildAdvisorSystemPrompt(): 动态构建系统提示词
+   - Token 预算管理: 按优先级分层加载
+   - getDefaultAdvisorContext(): 默认上下文
+   - getContextSummary(): 上下文摘要
+
+**预测系统 Prediction System (~290 lines):**
+9. `src/lib/advisor/prediction/alert-generator.ts`
+   - generatePriceBreakoutAlert(): 价格突破预警
+   - generateVolumeSurgeAlert(): 放量异动预警
+   - generateSentimentReversalAlert(): 情绪反转预警
+   - generateTechnicalSignalAlert(): 技术信号预警
+   - generateRiskWarningAlert(): 风险预警
+   - generateOpportunityAlert(): 投资机会预警
+   - sortAlerts(), filterExpiredAlerts(), filterAlertsByType()
+
+**反应系统 Reaction System (~400 lines):**
+10. `src/lib/advisor/reaction/debate-engine.ts`
+    - createDebateSession(): 创建辩论会话
+    - addDebateArgument(): 添加辩论论点
+    - setDebateConclusion(): 设置辩论结论
+    - generateDebatePrompts(): 生成辩论提示词
+    - parseModeratorConclusion(): 解析主持人结论
+    - formatDebateSession(): 格式化辩论展示
+
+11. `src/lib/advisor/index.ts` (~150 lines) - 模块主入口
+    - 统一导出所有子模块
+    - getAgentOptions(), getChatModeOptions(), getAlertTypeLabels()
+
+**前端组件 Frontend Components (~1200 lines):**
+12. `src/components/advisor/philosophy-selector.tsx` (~250 lines)
+    - 流派选择 UI: 核心流派、分析方法、交易风格、特色策略
+    - Token 消耗预估显示
+    - 可展开/折叠区块
+
+13. `src/components/advisor/alert-panel.tsx` (~290 lines)
+    - 预警展示面板
+    - AlertBadge 组件: 通知指示器
+    - 按优先级排序和过滤
+
+14. `src/components/advisor/debate-view.tsx` (~300 lines)
+    - 辩论会话可视化
+    - Bull/Bear 论点展示
+    - ConclusionCard: 结论卡片
+
+15. `src/components/advisor/mode-selector.tsx` (~150 lines)
+    - 对话模式选择: quick/deep/debate/diagnose
+    - 大师 Agent 快速选择
+
+16. `src/components/advisor/master-agent-cards.tsx` (~220 lines)
+    - 大师投资者卡片展示
+    - 名言引用
+    - 交易规则摘要
+
+17. `src/components/advisor/index.ts` - 组件导出
+
+**Hooks 和 API:**
+18. `src/hooks/use-advisor-preferences.ts` (~200 lines)
+    - 用户偏好管理 Hook
+    - localStorage 持久化
+    - 上下文、关注列表、预警管理
+
+19. `src/app/api/advisor/debate/route.ts` (~350 lines) - 辩论 API
+    - POST actions: start, argument, conclusion
+    - LLM 集成生成辩论内容
+
+**修改内容 Modified Files:**
+
+1. `src/app/api/advisor/chat/route.ts` - 增强支持新架构
+   - 接收 advisorContext 参数
+   - 使用 buildAdvisorSystemPrompt() 动态构建提示词
+   - 保持向后兼容
+
+**架构特性 Architecture Features:**
+
+| 特性 | 说明 |
+|------|------|
+| Multi-Agent | 4分析师 + 3研究员 + 4大师 = 11个 Agent |
+| 投资流派 | 7流派 + 5方法 + 5风格 + 4策略 = 21种选择 |
+| Token 管理 | 按模式动态预算 (1500-4000) |
+| 辩论系统 | Bull vs Bear 多轮辩论 |
+| 预警系统 | 6种预警类型，4级优先级 |
+| 用户偏好 | localStorage 持久化 |
+
+**TypeScript 错误修复:**
+- TOKEN_LIMITS 导入方式修正
+- 可选字段 undefined 检查
+- 正则匹配结果空检查
+- Map 迭代兼容性修复
+
+**结果 Result:**
+- TypeScript 类型检查通过 (0 errors)
+- 构建成功: 28 个页面全部生成
+- 新增 debate API 路由
+- Phase 8.5 Agentic 架构全部完成
+
+**状态 Status:** ✅ 已完成 / Completed
+
+---
+
+## 2026-01-20: Phase 8.5 前端集成 / Agentic Advisor Frontend Integration
+
+**用户需求 User Request:**
+- 将新创建的 Agentic 组件集成到投资顾问页面
+- 升级 advisor-chat.tsx 支持新的功能
+
+**方法 Method:**
+- 升级 AdvisorChat 组件支持 AdvisorContext
+- 集成 PhilosophySelector 流派选择器
+- 集成 CompactModeSelector 模式选择器
+- 集成 DebateView 辩论视图
+- 添加大师 Agent 快速切换功能
+
+**修改内容 Modified Files:**
+
+1. `src/components/advisor/advisor-chat.tsx` - 完全重写
+   - 导入新的 Agentic 组件
+   - 添加 `advisorContext` 状态管理
+   - 添加 `showSettings` 设置面板折叠状态
+   - 添加 `debateSession` 辩论会话状态
+   - 实现 `handleContextChange` 上下文变更处理
+   - 实现 `handleModeChange` 模式切换处理
+   - 实现 `handleMasterSelect` 大师视角快速切换
+   - 实现 `handleDebateRequest` 辩论模式请求处理
+   - 添加设置面板 UI (流派选择 + 大师快速切换)
+   - 添加上下文摘要显示
+   - 集成 DebateView 组件展示辩论结果
+   - 更新 WelcomeMessage 组件支持大师视角提示
+
+**新增功能 New Features:**
+
+| 功能 | 说明 |
+|------|------|
+| 流派选择器 | 可折叠设置面板，选择投资流派、分析方法、交易风格 |
+| 模式选择器 | 快速/深度/辩论/诊断 四种模式切换 |
+| 大师快速切换 | 巴菲特/林奇/利弗莫尔/西蒙斯 一键切换 |
+| 辩论模式 | Bull vs Bear 多空辩论，自动生成论点和结论 |
+| 上下文显示 | 实时显示当前配置摘要 |
+
+**TypeScript 错误修复:**
+- `CompactModeSelector` props 名称修正 (selectedMode)
+- `getContextSummary` 返回对象转字符串显示
+- `WelcomeMessage` masterAgent 类型兼容性修复
+- `handleMasterSelect` 中 philosophy 可选类型处理
+
+**结果 Result:**
+- TypeScript 类型检查通过 (0 errors)
+- 构建成功: 28 个页面全部生成
+- 投资顾问页面已集成所有新组件
+
+**状态 Status:** ✅ 已完成 / Completed
+
+---
+
 ## 2026-01-20: Phase 7.5 K线图与标签切换修复 / K-line Chart & Tab Switch Fix
 
 **用户需求 User Request:**
@@ -1595,5 +1951,157 @@ curl -s "https://gushen.lurus.cn/api/market/indices"
 - 显示真实交易时间状态
 - 类型检查通过
 - Phase 5.1-5.5 全部完成
+
+**状态 Status:** ✅ 已完成 / Completed
+
+---
+
+## 2026-01-20: Phase 8.5 Agentic 投资顾问部署成功
+
+### 用户需求 / User Request
+部署包含 Phase 8.5 Agentic 投资顾问架构的 v14 版本到 K3s 集群
+
+### 实施方法 / Method
+1. 清理服务器磁盘空间 (释放 6.8GB)
+2. 清理 Docker 缓存 (docker builder prune -af)
+3. 使用 --no-cache --pull 参数重新构建镜像
+4. 导出镜像到 tar 文件
+5. 传输到 worker 节点
+6. 导入到 containerd (ctr -n k8s.io images import)
+7. 重启 deployment
+
+### 修改/新增内容 / Changes
+**新增组件:**
+- `src/components/advisor/philosophy-selector.tsx` - 投资流派选择器
+- `src/components/advisor/mode-selector.tsx` - 分析模式选择器
+- `src/components/advisor/debate-view.tsx` - 多空辩论视图
+- `src/components/advisor/master-agent-cards.tsx` - 大师 Agent 卡片
+- `src/components/advisor/alert-panel.tsx` - 预警面板
+- `src/lib/advisor/philosophies/` - 投资流派提示词库
+- `src/lib/advisor/agent/` - Agent 核心架构
+- `src/app/api/advisor/debate/route.ts` - 辩论 API
+
+**修改文件:**
+- `src/components/advisor/advisor-chat.tsx` - 集成新组件
+- `src/app/api/advisor/chat/route.ts` - 支持动态上下文
+
+### 结果 / Result
+**已生效功能:**
+- ✅ 模式切换器 (快速/标准/深度)
+- ✅ 模式徽章显示
+- ✅ 快速问题按钮 (市场概览/行业分析/个股分析/风控建议)
+- ✅ 当前模式状态提示
+- ✅ 投资流派选择器 (通过设置按钮展开)
+- ✅ 多空辩论 API 端点
+
+**镜像版本:** gushen-web:v14
+**部署状态:** 成功运行于 cloud-ubuntu-3-2c2g 节点
+
+---
+
+## 2026-01-20: Phase 9 策略参数编辑器 / Strategy Parameter Editor
+
+### 用户需求 / User Request
+实现策略参数提取与可视化编辑功能，允许用户在 AI 生成策略代码后微调参数，无需重新生成。
+
+### 实施方法 / Method
+1. 设计增强的参数解析器，支持多种参数类型 (number/boolean/string/list)
+2. 创建参数元数据定义，包含显示名称、范围、单位、分类
+3. 实现参数 ↔ 代码的双向转换
+4. 开发可视化参数编辑器 UI 组件
+5. 集成到策略编辑器页面，支持实时预览和重新回测
+
+### 新增内容 / New Files
+
+1. `src/lib/strategy/parameter-parser.ts` (~650 lines) - 策略参数解析器
+   - **类型定义:**
+     - `ParameterType`: number | boolean | string | list
+     - `ParameterCategory`: indicator | signal | risk | position | general
+     - `StrategyParameter`: 完整参数定义 (name/displayName/type/value/range/unit)
+     - `IndicatorConfig`: 指标配置 (type/params/description)
+     - `ParsedStrategyResult`: 解析结果 (parameters/indicators/conditions)
+   - **参数定义库:**
+     - 均线参数: fast_window, slow_window, ma_window
+     - RSI参数: rsi_window, rsi_buy, rsi_sell
+     - MACD参数: macd_fast, macd_slow, macd_signal
+     - 布林带参数: boll_window, boll_dev
+     - 风控参数: stop_loss, take_profit, trailing_stop
+     - 仓位参数: fixed_size, position_pct
+   - **核心函数:**
+     - `parseStrategyParameters()`: 解析策略代码提取参数
+     - `extractParameters()`: 提取所有参数 (支持多种赋值格式)
+     - `detectIndicators()`: 检测使用的技术指标
+     - `updateStrategyCode()`: 更新代码中的参数值
+     - `validateParameter()`: 验证参数值范围
+     - `groupParametersByCategory()`: 按分类分组参数
+
+2. `src/lib/strategy/index.ts` - 策略模块导出
+
+3. `src/components/strategy-editor/parameter-editor.tsx` (~450 lines) - 参数编辑器组件
+   - **功能特性:**
+     - 按分类折叠显示参数 (指标/信号/风控/仓位/常规)
+     - 数值参数: 增减按钮 + 输入框 + 范围限制
+     - 布尔参数: 开关切换
+     - 字符串参数: 文本输入
+     - 修改状态追踪 (显示已修改标记)
+     - 参数验证和错误提示
+     - 应用修改 / 重置按钮
+     - 重新回测快捷按钮
+   - **子组件:**
+     - `ParameterInput`: 单个参数输入控件
+   - **UI 特性:**
+     - 策略名称和描述显示
+     - 使用的指标标签
+     - 默认值提示
+     - 单位后缀显示
+
+### 修改内容 / Modified Files
+
+1. `src/app/dashboard/page.tsx` - 策略编辑器页面升级
+   - 导入 `ParameterEditor` 组件
+   - 添加 `isBacktesting` 状态追踪
+   - 添加 `handleCodeUpdate` 回调处理参数更新
+   - 添加 `handleRerunBacktest` 重新回测功能
+   - 添加 `handleBacktestStart/End` 回调
+   - 页面布局从 2 列改为 3 列 (输入+参数 | 代码 | 回测)
+   - 添加策略验证导航链接
+   - 更新使用指南增加参数调优说明
+
+2. `src/components/strategy-editor/backtest-panel.tsx` - 回测面板增强
+   - 添加 `onBacktestStart` 回调属性
+   - 添加 `onBacktestEnd` 回调属性
+   - 在 `handleRunBacktest` 中调用回调函数
+
+### 架构特性 / Architecture Features
+
+| 特性 | 说明 |
+|------|------|
+| 多参数类型 | 支持 number/boolean/string/list 四种类型 |
+| 参数元数据 | 内置 20+ 常用参数的显示名称、范围、单位 |
+| 分类分组 | 5 个分类: indicator/signal/risk/position/general |
+| 双向绑定 | 参数修改 → 代码更新 → 回测验证 |
+| 范围验证 | 数值参数支持 min/max/step 约束 |
+| 修改追踪 | 高亮显示已修改参数，支持一键重置 |
+
+### 用户体验改进 / UX Improvements
+
+| 改进 | 说明 |
+|------|------|
+| 可视化编辑 | 无需手动修改代码，图形界面调整参数 |
+| 实时预览 | 参数修改后实时更新代码 |
+| 快速回测 | 修改参数后一键重新回测验证效果 |
+| 范围提示 | 显示参数有效范围和默认值 |
+| 分类折叠 | 按类型分组，减少视觉负担 |
+
+### 结果 / Result
+- TypeScript 类型检查通过 (0 errors)
+- 构建成功: 28 个页面全部生成
+- /dashboard 页面 JS 增加至 47.3 kB (功能增强)
+- 策略参数编辑器功能完整可用
+
+### 技术统计 / Technical Stats
+- 新增代码: ~1100 行
+- 新增文件: 3 个
+- 修改文件: 2 个
 
 **状态 Status:** ✅ 已完成 / Completed
