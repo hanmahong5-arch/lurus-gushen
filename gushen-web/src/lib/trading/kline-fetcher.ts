@@ -670,17 +670,79 @@ function generateSingleBar(
 // =============================================================================
 
 /**
+ * Fetch K-line data from backend API (CORS-safe)
+ * 从后端API获取K线数据（无CORS问题）
+ *
+ * This is the preferred method for browser environments.
+ * The backend proxies requests to third-party APIs.
+ */
+async function fetchFromBackendAPI(
+  config: KLineFetchConfig,
+): Promise<KLineData[]> {
+  const { symbol, timeframe, count = DEFAULT_COUNTS[timeframe] } = config;
+
+  const url = `/api/market/kline?symbol=${encodeURIComponent(symbol)}&timeframe=${timeframe}&limit=${count}`;
+
+  console.log(`[KLineFetcher] Backend API request: ${symbol} ${timeframe}`);
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 15000);
+
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: {
+        Accept: "application/json",
+      },
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const result = (await response.json()) as {
+      success: boolean;
+      data?: KLineData[];
+      error?: string;
+    };
+
+    if (!result.success || !result.data || result.data.length === 0) {
+      throw new Error(result.error || "No K-line data returned");
+    }
+
+    console.log(
+      `[KLineFetcher] Backend API success: ${result.data.length} bars`,
+    );
+    return result.data;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+/**
  * Data sources in priority order
+ * In browser environment, use backend API first (CORS-safe)
+ * Direct API calls are disabled because of CORS restrictions
  */
 const DATA_SOURCES: DataSource[] = [
   {
-    name: "eastmoney",
+    name: "backend-api",
     priority: 1,
-    fetcher: fetchFromEastMoney,
+    fetcher: fetchFromBackendAPI,
     enabled: true,
   },
-  { name: "sina", priority: 2, fetcher: fetchFromSina, enabled: true },
-  { name: "tencent", priority: 3, fetcher: fetchFromTencent, enabled: true },
+  // Direct API calls are disabled in browser due to CORS
+  // These are kept for server-side usage only
+  {
+    name: "eastmoney",
+    priority: 2,
+    fetcher: fetchFromEastMoney,
+    enabled: false, // Disabled: CORS blocked in browser
+  },
+  { name: "sina", priority: 3, fetcher: fetchFromSina, enabled: false }, // Disabled: CORS
+  { name: "tencent", priority: 4, fetcher: fetchFromTencent, enabled: false }, // Disabled: CORS
   {
     name: "mock",
     priority: 999,
