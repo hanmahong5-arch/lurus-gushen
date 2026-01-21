@@ -1,7 +1,9 @@
 # GuShen Web 开发计划
 # GuShen Web Development Plan
 
-> 最后更新 Last Updated: 2026-01-19
+> 最后更新 Last Updated: 2026-01-22
+>
+> **技术栈更新**: 已全面迁移至 **Bun** (10-20x 性能提升)
 
 ---
 

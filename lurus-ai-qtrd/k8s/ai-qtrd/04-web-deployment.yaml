@@ -34,7 +34,7 @@ spec:
 
       containers:
         - name: web
-          image: gushen-web:v14-new
+          image: gushen-web:v16
           imagePullPolicy: Never # Use local image imported to containerd
           ports:
             - containerPort: 3000
@@ -50,6 +50,21 @@ spec:
             # API proxy configuration
             - name: API_URL
               value: "http://ai-qtrd-api:8000"
+
+            # Redis configuration
+            - name: REDIS_ENABLED
+              value: "true"
+            - name: REDIS_HOST
+              value: "redis-service.ai-qtrd.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-qtrd-secrets
+                  key: REDIS_PASSWORD
+            - name: REDIS_DB
+              value: "0"
 
           resources:
             requests:

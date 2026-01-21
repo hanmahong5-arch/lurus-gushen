@@ -1,57 +1,67 @@
 # GuShen Web Frontend Dockerfile
-# Multi-stage build for optimized production image
+# Multi-stage build with Bun for optimized production image
 
 # ============================================
 # Stage 1: Dependencies
 # ============================================
-FROM node:20-alpine AS deps
+FROM oven/bun:1-alpine AS deps
 
 WORKDIR /app
 
-# Install dependencies based on lockfile with Chinese npm mirror
-COPY package.json package-lock.json* ./
-RUN npm config set registry https://registry.npmmirror.com && \
-    npm ci
+# Install build dependencies for native modules (better-sqlite3, etc.)
+RUN apk add --no-cache python3 make g++
+
+# Install dependencies using Bun (10-20x faster than npm)
+# Supports both package-lock.json and bun.lockb
+COPY package.json package-lock.json* bun.lockb* ./
+RUN bun install
 
 # ============================================
 # Stage 2: Builder
 # ============================================
-FROM node:20-alpine AS builder
+FROM oven/bun:1-alpine AS builder
 
 WORKDIR /app
 
-# Copy dependencies
+# Copy dependencies from deps stage
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build arguments for environment variables
 ARG API_URL
 ARG WS_URL
+ARG REDIS_HOST
+ARG REDIS_PORT
+ARG REDIS_PASSWORD
 ENV API_URL=${API_URL}
 ENV WS_URL=${WS_URL}
+ENV REDIS_HOST=${REDIS_HOST}
+ENV REDIS_PORT=${REDIS_PORT}
+ENV REDIS_PASSWORD=${REDIS_PASSWORD}
 ENV NEXT_TELEMETRY_DISABLED=1
 
-# Build the application
-RUN npm run build
+# Build the Next.js application using Bun
+RUN bun run build
 
 # ============================================
 # Stage 3: Runner
 # ============================================
-FROM node:20-alpine AS runner
+FROM oven/bun:1-alpine AS runner
 
 WORKDIR /app
 
-# Create non-root user
+# Create non-root user for security
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Set environment variables
+# Set production environment variables
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
 ENV HOSTNAME="0.0.0.0"
 
-# Copy built application
+# Copy built application from builder
+# Note: Bun can run Next.js standalone builds directly
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -59,12 +69,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 # Switch to non-root user
 USER nextjs
 
-# Expose port
+# Expose application port
 EXPOSE 3000
 
-# Health check
+# Health check endpoint
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD wget -q --spider http://localhost:3000/ || exit 1
 
-# Start the application
-CMD ["node", "server.js"]
+# Start the application with Bun runtime (faster than Node.js)
+CMD ["bun", "run", "server.js"]

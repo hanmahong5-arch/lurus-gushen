@@ -11,13 +11,16 @@ import {
   generateMockKLineData,
   KLineTimeFrame,
 } from "@/lib/data-service";
+import { cacheGet, cacheSet } from "@/lib/redis";
+
+// =============================================================================
+// Constants
+// =============================================================================
 
 // Environment flag for using mock data
-// 使用模拟数据的环境标志
 const USE_MOCK = process.env.USE_MOCK_DATA === "true";
 
 // Valid timeframes
-// 有效的时间周期
 const VALID_TIMEFRAMES: KLineTimeFrame[] = [
   "1m",
   "5m",
@@ -29,6 +32,22 @@ const VALID_TIMEFRAMES: KLineTimeFrame[] = [
   "1M",
 ];
 
+// TTL in seconds for different timeframes
+const TTL_MAP: Record<KLineTimeFrame, number> = {
+  "1m": 60, // 1 minute
+  "5m": 300, // 5 minutes
+  "15m": 900, // 15 minutes
+  "30m": 1800, // 30 minutes
+  "60m": 3600, // 1 hour
+  "1d": 3600, // 1 hour (daily data doesn't change frequently)
+  "1w": 86400, // 24 hours
+  "1M": 86400, // 24 hours
+};
+
+// =============================================================================
+// GET Handler
+// =============================================================================
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const symbol = searchParams.get("symbol");
@@ -36,14 +55,13 @@ export async function GET(request: NextRequest) {
   const limit = parseInt(searchParams.get("limit") || "200", 10);
 
   // Validate input
-  // 验证输入
   if (!symbol) {
     return NextResponse.json(
       {
         success: false,
         error: "Missing required parameter: symbol",
       },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -53,7 +71,7 @@ export async function GET(request: NextRequest) {
         success: false,
         error: `Invalid timeframe. Valid options: ${VALID_TIMEFRAMES.join(", ")}`,
       },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -63,14 +81,13 @@ export async function GET(request: NextRequest) {
         success: false,
         error: "Invalid limit. Must be between 1 and 1000",
       },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
   try {
     if (USE_MOCK) {
       // Generate mock data with appropriate starting price
-      // 使用适当的起始价格生成模拟数据
       const mockData = generateMockKLineData(symbol, limit);
       return NextResponse.json({
         success: true,
@@ -82,8 +99,37 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Try Redis cache first
+    const cacheKey = `kline:${symbol}:${timeframe}:${limit}`;
+    const cached = await cacheGet<{
+      success: boolean;
+      data: unknown[];
+      source: string;
+      timestamp: number;
+      latency: number;
+    }>(cacheKey);
+
+    if (cached) {
+      console.log("[KLine API] Cache hit:", cacheKey);
+      return NextResponse.json({
+        ...cached,
+        cached: true,
+      });
+    }
+
+    // Fetch from data service
     const result = await getKLineData(symbol, timeframe, limit);
-    return NextResponse.json(result);
+
+    // Cache the successful result
+    if (result.success && result.data && result.data.length > 0) {
+      const ttl = TTL_MAP[timeframe] || 300; // Default 5 minutes
+      await cacheSet(cacheKey, result, ttl);
+    }
+
+    return NextResponse.json({
+      ...result,
+      cached: false,
+    });
   } catch (err) {
     console.error("K-line API error:", err);
     return NextResponse.json(
@@ -91,7 +137,7 @@ export async function GET(request: NextRequest) {
         success: false,
         error: err instanceof Error ? err.message : "Internal server error",
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }

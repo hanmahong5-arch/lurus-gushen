@@ -22,6 +22,8 @@ import {
   type ParameterCategory,
   type ParsedStrategyResult,
 } from "@/lib/strategy/parameter-parser";
+import { ParameterInfoDialog } from "./parameter-info-dialog";
+import { hasEnhancedInfo } from "@/lib/strategy/enhanced-parameter-info";
 
 // =============================================================================
 // COMPONENT PROPS / 组件属性
@@ -373,6 +375,10 @@ function ParameterInput({
   const { name, displayName, type, value, description, range, unit, step } =
     parameter;
 
+  // State for parameter info dialog (Phase 3 UX enhancement)
+  const [showInfo, setShowInfo] = useState(false);
+  const hasInfo = hasEnhancedInfo(name);
+
   // Handle number input change
   const handleNumberChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -431,6 +437,19 @@ function ParameterInput({
           </label>
           {isModified && (
             <span className="w-1.5 h-1.5 rounded-full bg-accent" />
+          )}
+          {/* Info icon button (Phase 3 UX enhancement) */}
+          {hasInfo && (
+            <button
+              type="button"
+              onClick={() => setShowInfo(true)}
+              className="text-white/30 hover:text-white/60 transition-colors p-0.5"
+              title="查看参数详细说明"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
           )}
         </div>
         {unit && <span className="text-xs text-white/40">{unit}</span>}
@@ -585,6 +604,18 @@ function ParameterInput({
           </span>
         )}
       </div>
+
+      {/* Parameter info dialog (Phase 3 UX enhancement) */}
+      {hasInfo && (
+        <ParameterInfoDialog
+          parameter={parameter}
+          isOpen={showInfo}
+          onClose={() => setShowInfo(false)}
+          onApplyValue={(newValue) => {
+            onChange(name, newValue);
+          }}
+        />
+      )}
     </div>
   );
 }

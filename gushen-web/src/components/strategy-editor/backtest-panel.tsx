@@ -3,53 +3,18 @@
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { EnhancedTradeCard } from "./enhanced-trade-card";
+import { BacktestBasisPanel } from "./backtest-basis-panel";
+import type { BacktestResult, DetailedTrade } from "@/lib/backtest/types";
 
 // =============================================================================
 // TYPES / 类型定义
 // =============================================================================
 
-interface BacktestResult {
-  totalReturn: number;
-  annualizedReturn: number;
-  maxDrawdown: number;
-  sharpeRatio: number;
-  sortinoRatio?: number;
-  winRate: number;
-  totalTrades: number;
-  profitFactor?: number;
-  avgWin?: number;
-  avgLoss?: number;
-  maxConsecutiveWins?: number;
-  maxConsecutiveLosses?: number;
-  avgHoldingPeriod?: number;
-  maxSingleWin?: number;
-  maxSingleLoss?: number;
-  equityCurve?: Array<{ date: string; equity: number; drawdown: number }>;
-  trades?: Array<{
-    id: string;
-    type: "buy" | "sell";
-    price: number;
-    size: number;
-    timestamp: number;
-    reason: string;
-    pnl?: number;
-    pnlPercent?: number;
-    // Phase 7: Enhanced fields (optional for backward compatibility)
-    symbol?: string;
-    symbolName?: string;
-    executePrice?: number;
-    actualQuantity?: number;
-    lots?: number;
-    lotSize?: number;
-    quantityUnit?: string;
-    orderValue?: number;
-  }>;
-  strategy?: {
-    name: string;
-    params: Record<string, number>;
-    indicators: string[];
-  };
-}
+// Note: BacktestResult is now imported from @/lib/backtest/types
+// This includes all fields needed for the enhanced UX (Phase 1):
+// - backtestMeta for transparency
+// - config, executionTime, etc.
 
 interface BacktestConfig {
   symbol: string;
@@ -462,6 +427,9 @@ export function BacktestPanel({
               </div>
             )}
 
+            {/* Backtest Basis Panel - Show data source and configuration transparency */}
+            <BacktestBasisPanel result={displayResult} className="mb-4" />
+
             {/* Main Metrics Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
               <MetricCard
@@ -578,119 +546,138 @@ export function BacktestPanel({
               </div>
             )}
 
-            {/* Trade List - Enhanced with symbol name and lots info (Phase 7) */}
+            {/* Trade List - Enhanced with detailed information (Phase 14 UX) */}
             {showTrades &&
               displayResult.trades &&
               displayResult.trades.length > 0 && (
                 <div className="mt-4 p-4 bg-primary/30 rounded-lg border border-border">
-                  <h4 className="text-sm font-medium text-white mb-3">
-                    交易记录 / Trade History ({displayResult.trades.length}笔)
-                  </h4>
-                  <div className="max-h-80 overflow-y-auto space-y-2">
-                    {displayResult.trades.slice(-20).map((trade) => {
-                      // Use enhanced fields if available, fallback to legacy
-                      const displayPrice = trade.executePrice ?? trade.price;
-                      const displayQty = trade.actualQuantity ?? trade.size;
-                      const unit = trade.quantityUnit ?? "股";
-                      const hasEnhancedInfo =
-                        trade.symbolName || trade.lots !== undefined;
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-medium text-white">
+                      交易记录 / Trade History
+                    </h4>
+                    <span className="text-xs text-white/40">
+                      共 {displayResult.trades.length} 笔交易（最近20笔）
+                    </span>
+                  </div>
+                  <div className="max-h-[600px] overflow-y-auto space-y-3">
+                    {(() => {
+                      try {
+                        // Use enhanced trades if available (DetailedTrade[])
+                        const tradesToDisplay = displayResult.enhanced?.trades ?? displayResult.trades;
 
-                      return (
-                        <div
-                          key={trade.id}
-                          className={cn(
-                            "p-2 rounded text-xs",
-                            trade.type === "buy"
-                              ? "bg-profit/10"
-                              : "bg-loss/10",
-                          )}
-                        >
-                          {/* Row 1: Direction, Symbol, Quantity */}
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span
-                                className={cn(
-                                  "font-medium px-1.5 py-0.5 rounded",
-                                  trade.type === "buy"
-                                    ? "text-profit bg-profit/20"
-                                    : "text-loss bg-loss/20",
-                                )}
-                              >
-                                {trade.type === "buy" ? "买入" : "卖出"}
-                              </span>
-                              {/* Symbol name display (Phase 7) */}
-                              {trade.symbolName ? (
-                                <span className="text-white font-medium">
-                                  {trade.symbolName}
-                                  {trade.symbol && (
-                                    <span className="text-white/40 ml-1">
-                                      ({trade.symbol.split(".")[0]})
-                                    </span>
+                        // Validate trades array
+                        if (!Array.isArray(tradesToDisplay) || tradesToDisplay.length === 0) {
+                          return (
+                            <div className="text-center text-white/40 py-4">
+                              暂无交易记录
+                            </div>
+                          );
+                        }
+
+                        // Safe slice and map with validation
+                        return tradesToDisplay
+                          .slice(-20)
+                          .filter(trade => trade && typeof trade === "object")
+                          .map((trade, index) => {
+                            try {
+                              // Generate safe key
+                              const safeKey = trade.id || `trade-${index}`;
+
+                              // Check if trade has DetailedTrade structure
+                              const isDetailedTrade =
+                                trade &&
+                                typeof trade === "object" &&
+                                "triggerReason" in trade &&
+                                "indicatorValues" in trade &&
+                                "cashBefore" in trade;
+
+                              // If trade has detailed structure, use EnhancedTradeCard
+                              if (isDetailedTrade) {
+                                return (
+                                  <EnhancedTradeCard
+                                    key={safeKey}
+                                    trade={trade as unknown as DetailedTrade}
+                                    onError={(error) => {
+                                      console.error("[BacktestPanel] EnhancedTradeCard error:", error);
+                                    }}
+                                  />
+                                );
+                              }
+
+                              // Fallback to legacy display for backward compatibility
+                              // Validate legacy trade fields
+                              const displayPrice = typeof trade.price === "number" && isFinite(trade.price)
+                                ? trade.price
+                                : 0;
+                              const displayQty = typeof trade.size === "number" && isFinite(trade.size)
+                                ? trade.size
+                                : 0;
+                              const unit = "股";
+                              const tradeType = trade.type === "buy" || trade.type === "sell" ? trade.type : "buy";
+                              const pnlPercent = typeof trade.pnlPercent === "number" && isFinite(trade.pnlPercent)
+                                ? trade.pnlPercent
+                                : null;
+                              const reason = typeof trade.reason === "string" ? trade.reason : null;
+
+                              return (
+                                <div
+                                  key={safeKey}
+                                  className={cn(
+                                    "p-2 rounded text-xs",
+                                    tradeType === "buy" ? "bg-profit/10" : "bg-loss/10"
                                   )}
-                                </span>
-                              ) : trade.symbol ? (
-                                <span className="text-white/70">
-                                  {trade.symbol}
-                                </span>
-                              ) : null}
-                            </div>
-                            {/* P&L display */}
-                            {trade.pnlPercent !== undefined && (
-                              <span
-                                className={cn(
-                                  "font-medium",
-                                  trade.pnlPercent >= 0
-                                    ? "text-profit"
-                                    : "text-loss",
-                                )}
-                              >
-                                {trade.pnlPercent >= 0 ? "+" : ""}
-                                {trade.pnlPercent.toFixed(2)}%
-                                {trade.pnl !== undefined && (
-                                  <span className="text-white/40 ml-1">
-                                    ({trade.pnl >= 0 ? "+" : ""}¥
-                                    {trade.pnl.toFixed(0)})
-                                  </span>
-                                )}
-                              </span>
-                            )}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span
+                                        className={cn(
+                                          "font-medium px-1.5 py-0.5 rounded",
+                                          tradeType === "buy"
+                                            ? "text-profit bg-profit/20"
+                                            : "text-loss bg-loss/20"
+                                        )}
+                                      >
+                                        {tradeType === "buy" ? "买入" : "卖出"}
+                                      </span>
+                                    </div>
+                                    {pnlPercent !== null && (
+                                      <span
+                                        className={cn(
+                                          "font-medium",
+                                          pnlPercent >= 0 ? "text-profit" : "text-loss"
+                                        )}
+                                      >
+                                        {pnlPercent >= 0 ? "+" : ""}
+                                        {pnlPercent.toFixed(2)}%
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="mt-1 text-white/60">
+                                    ¥{displayPrice.toFixed(2)} × {displayQty.toLocaleString()}{unit}
+                                    {reason && (
+                                      <span className="ml-2 text-white/40">{reason}</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            } catch (tradeError) {
+                              console.error("[BacktestPanel] Trade render error:", tradeError, trade);
+                              return (
+                                <div key={`error-${index}`} className="p-2 rounded text-xs bg-error/10 border border-error/20">
+                                  <span className="text-error text-xs">交易记录渲染失败</span>
+                                </div>
+                              );
+                            }
+                          });
+                      } catch (error) {
+                        console.error("[BacktestPanel] Trades display error:", error);
+                        return (
+                          <div className="text-center text-error py-4">
+                            交易记录加载失败
                           </div>
-
-                          {/* Row 2: Price, Quantity, Order Value */}
-                          <div className="flex items-center justify-between mt-1.5 text-white/60">
-                            <div className="flex items-center gap-3">
-                              <span>
-                                ¥{displayPrice.toFixed(2)} ×{" "}
-                                {displayQty.toLocaleString()}
-                                {unit}
-                                {/* Show lots if available (Phase 7) */}
-                                {trade.lots !== undefined && trade.lots > 0 && (
-                                  <span className="text-white/40 ml-1">
-                                    ({trade.lots}手)
-                                  </span>
-                                )}
-                              </span>
-                              {/* Order value (Phase 7) */}
-                              {trade.orderValue !== undefined && (
-                                <span className="text-white/40">
-                                  金额: ¥
-                                  {trade.orderValue.toLocaleString(undefined, {
-                                    maximumFractionDigits: 0,
-                                  })}
-                                </span>
-                              )}
-                            </div>
-                            {/* Reason */}
-                            <span
-                              className="text-white/40 max-w-[120px] truncate"
-                              title={trade.reason}
-                            >
-                              {trade.reason}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      }
+                    })()}
                   </div>
                 </div>
               )}

@@ -1,0 +1,167 @@
+# Redis StatefulSet
+# High-availability Redis deployment with master-replica configuration
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: redis
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: database
+    app.kubernetes.io/version: "7.2"
+spec:
+  serviceName: redis-headless
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+      app.kubernetes.io/component: database
+
+  # Pod Management Policy: Parallel allows faster scaling
+  podManagementPolicy: Parallel
+
+  # Update Strategy: Rolling update one pod at a time
+  updateStrategy:
+    type: RollingUpdate
+    rollingUpdate:
+      partition: 0
+
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: redis
+        app.kubernetes.io/component: database
+        app.kubernetes.io/version: "7.2"
+    spec:
+      # Anti-affinity: prefer spreading pods across different nodes
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchLabels:
+                    app.kubernetes.io/name: redis
+                topologyKey: kubernetes.io/hostname
+
+      # Security Context
+      securityContext:
+        fsGroup: 1000
+        runAsUser: 1000
+        runAsNonRoot: true
+
+      containers:
+        - name: redis
+          image: redis:7.2-alpine
+          imagePullPolicy: IfNotPresent
+
+          command:
+            - /bin/sh
+            - -c
+            - |
+              # Determine if this is the master (redis-0) or a replica
+              HOSTNAME=$(hostname)
+              if [[ "$HOSTNAME" == "redis-0" ]]; then
+                echo "Starting as MASTER"
+                redis-server /etc/redis/redis.conf \
+                  --requirepass ${REDIS_PASSWORD} \
+                  --masterauth ${REDIS_PASSWORD}
+              else
+                echo "Starting as REPLICA of redis-0"
+                redis-server /etc/redis/redis.conf \
+                  --requirepass ${REDIS_PASSWORD} \
+                  --masterauth ${REDIS_PASSWORD} \
+                  --replicaof redis-0.redis-headless.ai-qtrd.svc.cluster.local 6379
+              fi
+
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-qtrd-secrets
+                  key: REDIS_PASSWORD
+            - name: REDIS_REPLICATION_MODE
+              value: "master"
+
+          ports:
+            - name: redis
+              containerPort: 6379
+              protocol: TCP
+
+          # Resource limits and requests
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "250m"
+            limits:
+              memory: "2Gi"
+              cpu: "1000m"
+
+          # Liveness Probe: Check if Redis is responsive
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a ${REDIS_PASSWORD} ping | grep PONG
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 3
+
+          # Readiness Probe: Check if Redis is ready to accept connections
+          readinessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a ${REDIS_PASSWORD} ping | grep PONG
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 3
+
+          # Startup Probe: Give Redis more time to start initially
+          startupProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - redis-cli -a ${REDIS_PASSWORD} ping | grep PONG
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            successThreshold: 1
+            failureThreshold: 30
+
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: config
+              mountPath: /etc/redis
+              readOnly: true
+
+      volumes:
+        - name: config
+          configMap:
+            name: redis-config
+            defaultMode: 0644
+
+  # Volume Claim Templates: Persistent storage for each Redis pod
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+        labels:
+          app.kubernetes.io/name: redis
+          app.kubernetes.io/component: database
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
+        # StorageClass will use the default storage class
+        # Uncomment and modify if you need a specific storage class
+        # storageClassName: local-path

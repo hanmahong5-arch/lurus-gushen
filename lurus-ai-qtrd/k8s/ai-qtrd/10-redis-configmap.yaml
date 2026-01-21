@@ -1,0 +1,93 @@
+# Redis Configuration
+# ConfigMap for Redis server settings
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: ai-qtrd
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: database
+data:
+  redis.conf: |
+    # Network Configuration
+    # Bind to all interfaces within the pod
+    bind 0.0.0.0
+    protected-mode yes
+    port 6379
+    tcp-backlog 511
+    timeout 0
+    tcp-keepalive 300
+
+    # General Configuration
+    daemonize no
+    supervised no
+    pidfile /var/run/redis.pid
+    loglevel notice
+    databases 16
+
+    # Snapshotting (RDB persistence)
+    # Save the DB if at least 1 key changed in 900s (15min)
+    save 900 1
+    # Save the DB if at least 10 keys changed in 300s (5min)
+    save 300 10
+    # Save the DB if at least 10000 keys changed in 60s (1min)
+    save 60 10000
+    stop-writes-on-bgsave-error yes
+    rdbcompression yes
+    rdbchecksum yes
+    dbfilename dump.rdb
+    dir /data
+
+    # AOF (Append Only File) persistence
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+    no-appendfsync-on-rewrite no
+    auto-aof-rewrite-percentage 100
+    auto-aof-rewrite-min-size 64mb
+
+    # Memory Management
+    # Set max memory to 1.5GB (leaving 500MB for system)
+    maxmemory 1536mb
+    # Eviction policy: remove least recently used keys
+    maxmemory-policy allkeys-lru
+    maxmemory-samples 5
+
+    # Lazy Freeing
+    lazyfree-lazy-eviction yes
+    lazyfree-lazy-expire yes
+    lazyfree-lazy-server-del yes
+    replica-lazy-flush yes
+
+    # Replication Configuration
+    # These will be overridden by StatefulSet for replica pods
+    replica-serve-stale-data yes
+    replica-read-only yes
+    repl-diskless-sync no
+    repl-diskless-sync-delay 5
+    repl-disable-tcp-nodelay no
+    replica-priority 100
+
+    # Security
+    # Password will be set via environment variable
+    # requirepass will be configured in the StatefulSet
+
+    # Client Output Buffer Limits
+    client-output-buffer-limit normal 0 0 0
+    client-output-buffer-limit replica 256mb 64mb 60
+    client-output-buffer-limit pubsub 32mb 8mb 60
+
+    # Performance Tuning
+    hz 10
+    dynamic-hz yes
+    aof-rewrite-incremental-fsync yes
+    rdb-save-incremental-fsync yes
+
+    # Active Defragmentation
+    activedefrag yes
+    active-defrag-ignore-bytes 100mb
+    active-defrag-threshold-lower 10
+    active-defrag-threshold-upper 100
+    active-defrag-cycle-min 5
+    active-defrag-cycle-max 75

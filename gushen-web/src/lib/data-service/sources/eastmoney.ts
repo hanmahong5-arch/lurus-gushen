@@ -28,6 +28,12 @@ import {
   getCapitalFlowCacheKey,
   getKLineTTL,
 } from "../cache";
+import {
+  parseChinaTimeToUnix,
+  alignToBarStart,
+  isWithinTradingHours,
+  isIntradayTimeframe,
+} from "../../trading/time-parser";
 
 // =============================================================================
 // CONSTANTS / 常量
@@ -138,30 +144,56 @@ function parseQuoteResponse(data: Record<string, unknown>): StockQuote | null {
 /**
  * Parse EastMoney K-line response
  * 解析东方财富K线响应
+ *
+ * ✨ Enhanced with timezone-aware parsing and trading hour validation
+ * 增强版：支持时区感知解析和交易时段验证
  */
-function parseKLineResponse(data: Record<string, unknown>): KLineData[] {
+function parseKLineResponse(
+  data: Record<string, unknown>,
+  timeframe: KLineTimeFrame
+): KLineData[] {
   try {
     const d = data.data as Record<string, unknown>;
     if (!d || !d.klines) return [];
 
     const klines = d.klines as string[];
-    return klines.map((line) => {
-      const parts = line.split(",");
-      const timeStr = parts[0] ?? "";
-      // Parse time string to timestamp
-      // 解析时间字符串为时间戳
-      const date = new Date(timeStr.replace(/-/g, "/"));
+    const isIntraday = isIntradayTimeframe(timeframe);
 
-      return {
-        time: Math.floor(date.getTime() / 1000),
-        open: parseFloat(parts[1] ?? "0"),
-        close: parseFloat(parts[2] ?? "0"),
-        high: parseFloat(parts[3] ?? "0"),
-        low: parseFloat(parts[4] ?? "0"),
-        volume: parseFloat(parts[5] ?? "0"),
-        amount: parseFloat(parts[6] ?? "0"),
-      };
-    });
+    return klines
+      .map((line): KLineData | null => {
+        const parts = line.split(",");
+        const timeStr = parts[0] ?? "";
+
+        // ✅ FIX 1: Use timezone-aware parser for China market time
+        // 使用时区感知的解析器处理中国市场时间
+        const timestamp = parseChinaTimeToUnix(timeStr);
+
+        // ✅ FIX 2: Align to bar start for intraday timeframes
+        // 日内周期对齐到K线起始时间
+        const alignedTime = isIntraday
+          ? alignToBarStart(timestamp, timeframe)
+          : timestamp;
+
+        // ✅ FIX 3: Validate trading hours for intraday data
+        // 验证日内数据的交易时段
+        if (isIntraday && !isWithinTradingHours(alignedTime, timeframe)) {
+          // Skip bars outside trading hours (pre-market, lunch break, after-hours)
+          // 跳过交易时段外的K线（集合竞价、午休、盘后）
+          logger.debug(SOURCE_NAME, `Skipping non-trading hour bar: ${timeStr}`);
+          return null;
+        }
+
+        return {
+          time: alignedTime,
+          open: parseFloat(parts[1] ?? "0"),
+          close: parseFloat(parts[2] ?? "0"),
+          high: parseFloat(parts[3] ?? "0"),
+          low: parseFloat(parts[4] ?? "0"),
+          volume: parseFloat(parts[5] ?? "0"),
+          amount: parseFloat(parts[6] ?? "0"),
+        };
+      })
+      .filter((bar): bar is KLineData => bar !== null); // Remove invalid bars
   } catch (err) {
     logger.error(SOURCE_NAME, "Failed to parse K-line response", {
       error: err instanceof Error ? err.message : String(err),
@@ -414,7 +446,7 @@ export async function getKLineData(
     }
 
     const data = (await response.json()) as Record<string, unknown>;
-    const klines = parseKLineResponse(data);
+    const klines = parseKLineResponse(data, timeframe); // ✨ Pass timeframe parameter
 
     if (klines.length === 0) {
       throw new Error("No K-line data returned");

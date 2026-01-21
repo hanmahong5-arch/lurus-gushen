@@ -14,6 +14,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { NavHeader } from "@/components/dashboard/nav-header";
+import { StrategyGuideCard } from "@/components/strategy-editor/strategy-guide-card";
 import {
   ConfigPanel,
   ValidationConfig,
@@ -112,6 +113,20 @@ export default function StrategyValidationPage() {
       abortControllerRef.current.abort();
     }
 
+    // Validate configuration based on selection mode
+    // 根据选择模式验证配置
+    if (config.selectionMode === 'stocks') {
+      if (!config.selectedSymbols || config.selectedSymbols.length === 0) {
+        setError('请至少选择一只股票 / Please select at least one stock');
+        return;
+      }
+    } else {
+      if (!config.sectorCode) {
+        setError('请选择一个行业板块 / Please select a sector');
+        return;
+      }
+    }
+
     // Create new AbortController for this request
     // 为此次请求创建新的AbortController
     const controller = new AbortController();
@@ -125,10 +140,33 @@ export default function StrategyValidationPage() {
     setError(null);
 
     try {
-      const response = await fetch("/api/backtest/sector", {
+      // Determine API endpoint based on selection mode
+      // 根据选择模式确定API端点
+      const apiEndpoint = config.selectionMode === 'stocks'
+        ? '/api/backtest/multi-stocks'
+        : '/api/backtest/sector';
+
+      // Prepare request body based on mode
+      // 根据模式准备请求体
+      const requestBody = config.selectionMode === 'stocks'
+        ? {
+            symbols: config.selectedSymbols,
+            strategy: config.strategy,
+            startDate: config.startDate,
+            endDate: config.endDate,
+            holdingDays: config.holdingDays,
+            maxStocks: config.maxStocks,
+            includeTransactionCosts: config.includeTransactionCosts,
+            excludeSTStocks: config.excludeSTStocks,
+            deduplicateSignals: config.deduplicateSignals,
+            dataSource: 'database', // Prefer database for performance
+          }
+        : config;
+
+      const response = await fetch(apiEndpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(config),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       });
 
@@ -142,6 +180,37 @@ export default function StrategyValidationPage() {
 
       if (data.success && data.data) {
         setResult(data.data);
+      } else if (data.success && data.stockResults) {
+        // Handle multi-stocks API response format
+        // 处理多股API的响应格式
+        setResult({
+          summary: data.summary,
+          stockRanking: data.stockResults.map((s: any) => ({
+            symbol: s.symbol,
+            name: s.name,
+            signalCount: s.signalCount,
+            avgReturn: s.avgReturn,
+            winRate: s.winRate,
+            totalReturn: s.totalReturn,
+          })),
+          signalDetails: data.stockResults.flatMap((s: any) =>
+            s.signals.map((signal: any) => ({
+              symbol: s.symbol,
+              name: s.name,
+              date: signal.date,
+              type: signal.type,
+              price: signal.price,
+              return: signal.return,
+            }))
+          ),
+          returnDistribution: [], // Will be calculated client-side if needed
+          signalTimeline: [], // Will be calculated client-side if needed
+          meta: {
+            executionTime: data.executionTime || 0,
+            dataSource: data.dataSource || 'unknown',
+            timestamp: data.timestamp || new Date().toISOString(),
+          },
+        });
       } else {
         setError(data.error ?? "验证失败 / Validation failed");
       }
@@ -265,6 +334,9 @@ export default function StrategyValidationPage() {
             验证交易策略在不同行业板块的历史表现，了解策略的胜率和收益分布
           </p>
         </div>
+
+        {/* Strategy Guide Card (Phase 4 UX enhancement) */}
+        <StrategyGuideCard currentStep="validation" className="mb-6" />
 
         {/* Error Message */}
         {error && (

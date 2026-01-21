@@ -10,9 +10,13 @@ resources:
   - 01-secrets.yaml
   - 02-configmap.yaml
   - 03-api-deployment.yaml
+  - 04-web-deployment.yaml
   - 05-services.yaml
   - 06-ingress-routes.yaml
   - 07-certificate.yaml
+  - 08-redis-statefulset.yaml
+  - 09-redis-service.yaml
+  - 10-redis-configmap.yaml
 
 commonLabels:
   app.kubernetes.io/part-of: ai-qtrd

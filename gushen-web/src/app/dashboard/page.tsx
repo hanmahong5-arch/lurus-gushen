@@ -1,21 +1,59 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { StrategyInput } from "@/components/strategy-editor/strategy-input";
 import { CodePreview } from "@/components/strategy-editor/code-preview";
 import { BacktestPanel } from "@/components/strategy-editor/backtest-panel";
 import { StrategyTemplateList } from "@/components/strategy-editor/strategy-templates";
 import { ParameterEditor } from "@/components/strategy-editor/parameter-editor";
+import { AutoSaveIndicator } from "@/components/strategy-editor/auto-save-indicator";
+import { DraftHistoryPanel } from "@/components/strategy-editor/draft-history-panel";
+import { StrategyGuideCard } from "@/components/strategy-editor/strategy-guide-card";
+import {
+  useStrategyWorkspaceStore,
+  selectWorkspace,
+  selectAutoSaveStatus,
+  selectHasUnsavedChanges,
+  selectStrategyInput,
+  selectGeneratedCode,
+  selectIsGenerating,
+  selectIsBacktesting,
+} from "@/lib/stores/strategy-workspace-store";
 
 export default function DashboardPage() {
-  const [generatedCode, setGeneratedCode] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [strategyInputValue, setStrategyInputValue] = useState("");
+  // ✨ Use Zustand store instead of useState for persistent state
+  // 使用Zustand store替代useState以实现持久化状态
+  const workspace = useStrategyWorkspaceStore(selectWorkspace);
+  const autoSaveStatus = useStrategyWorkspaceStore(selectAutoSaveStatus);
+  const hasUnsavedChanges = useStrategyWorkspaceStore(selectHasUnsavedChanges);
+  const strategyInput = useStrategyWorkspaceStore(selectStrategyInput);
+  const generatedCode = useStrategyWorkspaceStore(selectGeneratedCode);
+  const isGenerating = useStrategyWorkspaceStore(selectIsGenerating);
+  const isBacktesting = useStrategyWorkspaceStore(selectIsBacktesting);
 
-  // Track if backtest is running
-  const [isBacktesting, setIsBacktesting] = useState(false);
+  const {
+    updateStrategyInput,
+    updateGeneratedCode,
+    setGenerating,
+    setGenerationError,
+    setBacktesting,
+    saveDraft,
+    markAsUnsaved,
+  } = useStrategyWorkspaceStore();
+
+  // Local error state (not persisted)
+  // 本地错误状态（不持久化）
+  const [error, setError] = useState<string | null>(null);
+
+  // Calculate current workflow step (Phase 4 UX enhancement)
+  // 计算当前工作流步骤（Phase 4用户体验增强）
+  const currentWorkflowStep = useMemo(() => {
+    if (!generatedCode) return "strategy"; // No code yet, user is defining strategy
+    if (!workspace.lastBacktestResult) return "parameters"; // Code generated, adjusting parameters
+    return "backtest"; // Has backtest result, analyzing results
+    // "validation" step is on strategy-validation page
+  }, [generatedCode, workspace.lastBacktestResult]);
 
   // Ref to StrategyInput for focusing after template selection
   // 用于模板选择后聚焦到输入框
@@ -24,10 +62,76 @@ export default function DashboardPage() {
   // Ref for backtest panel to trigger rerun
   const backtestPanelRef = useRef<{ runBacktest: () => void } | null>(null);
 
+  // Auto-save timer ref
+  const autoSaveTimerRef = useRef<NodeJS.Timeout>();
+
+  // ✨ Auto-save mechanism - debounced 3 seconds
+  // 自动保存机制 - 3秒防抖
+  useEffect(() => {
+    if (workspace.autoSaveStatus === 'unsaved') {
+      // Clear existing timer
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+
+      // Set new timer
+      autoSaveTimerRef.current = setTimeout(() => {
+        console.log('[Dashboard] Auto-saving draft...');
+        saveDraft();
+      }, 3000);
+    }
+
+    return () => {
+      if (autoSaveTimerRef.current) {
+        clearTimeout(autoSaveTimerRef.current);
+      }
+    };
+  }, [workspace.autoSaveStatus, saveDraft]);
+
+  // ✨ Warn before leaving page if there are unsaved changes
+  // 如果有未保存的更改，离开页面前警告
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsavedChanges) {
+        e.preventDefault();
+        e.returnValue = '您有未保存的更改，确定要离开吗？';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedChanges]);
+
+  // ✨ Save draft before Next.js route change
+  // Next.js路由切换前保存草稿
+  useEffect(() => {
+    const handleRouteChange = () => {
+      if (hasUnsavedChanges) {
+        console.log('[Dashboard] Saving before route change...');
+        saveDraft();
+      }
+    };
+
+    // Note: In Next.js App Router, route change detection is different
+    // This is a fallback mechanism, the main protection is beforeunload
+    // 注意：在Next.js App Router中，路由变化检测方式不同
+    // 这是一个后备机制，主要保护是beforeunload
+
+    return () => {
+      // Cleanup - save before unmount
+      if (hasUnsavedChanges) {
+        saveDraft();
+      }
+    };
+  }, [hasUnsavedChanges, saveDraft]);
+
   const handleGenerate = useCallback(async (prompt: string) => {
-    setIsGenerating(true);
-    setGeneratedCode("");
+    setGenerating(true);
+    updateGeneratedCode("");
     setError(null);
+    setGenerationError(null);
+    updateStrategyInput(prompt);
 
     try {
       // Call real API endpoint
@@ -57,40 +161,45 @@ export default function DashboardPage() {
       }
 
       if (data.success && data.code) {
-        setGeneratedCode(data.code);
+        updateGeneratedCode(data.code);
+        // ✨ Immediately save draft after code generation
+        // 代码生成后立即保存草稿
+        setTimeout(() => saveDraft(), 0);
       } else {
         throw new Error("No code generated");
       }
     } catch (err) {
       console.error("Generation error:", err);
-      setError(err instanceof Error ? err.message : "Unknown error occurred");
+      const errorMsg = err instanceof Error ? err.message : "Unknown error occurred";
+      setError(errorMsg);
+      setGenerationError(errorMsg);
 
       // Fallback to mock code if API fails
       // 如果 API 失败，使用模拟代码作为后备
       const fallbackCode = generateFallbackCode(prompt);
-      setGeneratedCode(fallbackCode);
+      updateGeneratedCode(fallbackCode);
     } finally {
-      setIsGenerating(false);
+      setGenerating(false);
     }
-  }, []);
+  }, [updateStrategyInput, updateGeneratedCode, setGenerating, setGenerationError, saveDraft]);
 
   // Handle template selection - fill into input
   // 处理模板选择 - 填充到输入框
   const handleSelectTemplate = useCallback((prompt: string) => {
-    setStrategyInputValue(prompt);
+    updateStrategyInput(prompt);
     // Scroll to input area
     // 滚动到输入区域
     strategyInputRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "center",
     });
-  }, []);
+  }, [updateStrategyInput]);
 
   // Handle code update from parameter editor
   // 处理参数编辑器的代码更新
   const handleCodeUpdate = useCallback((newCode: string) => {
-    setGeneratedCode(newCode);
-  }, []);
+    updateGeneratedCode(newCode);
+  }, [updateGeneratedCode]);
 
   // Handle rerun backtest request
   // 处理重新回测请求
@@ -101,12 +210,12 @@ export default function DashboardPage() {
   // Handle backtest state changes
   // 处理回测状态变化
   const handleBacktestStart = useCallback(() => {
-    setIsBacktesting(true);
-  }, []);
+    setBacktesting(true);
+  }, [setBacktesting]);
 
   const handleBacktestEnd = useCallback(() => {
-    setIsBacktesting(false);
-  }, []);
+    setBacktesting(false);
+  }, [setBacktesting]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -157,6 +266,16 @@ export default function DashboardPage() {
             </nav>
 
             <div className="flex items-center gap-3">
+              {/* ✨ Auto-save indicator / 自动保存指示器 */}
+              <AutoSaveIndicator
+                status={autoSaveStatus}
+                lastSavedAt={workspace.lastSavedAt}
+                onClick={() => {
+                  if (autoSaveStatus === 'error') {
+                    saveDraft();
+                  }
+                }}
+              />
               <span className="text-sm text-white/50">演示账户</span>
               <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
                 <span className="text-accent text-sm">D</span>
@@ -182,6 +301,9 @@ export default function DashboardPage() {
           </p>
         </div>
 
+        {/* Strategy Guide Card (Phase 4 UX enhancement) */}
+        <StrategyGuideCard currentStep={currentWorkflowStep} className="mb-6" />
+
         {/* Error message */}
         {error && (
           <div className="mb-6 p-4 bg-loss/10 border border-loss/30 rounded-lg">
@@ -198,8 +320,8 @@ export default function DashboardPage() {
             <StrategyInput
               onGenerate={handleGenerate}
               isLoading={isGenerating}
-              value={strategyInputValue}
-              onChange={setStrategyInputValue}
+              value={strategyInput}
+              onChange={updateStrategyInput}
             />
 
             {/* Parameter Editor - shows when code is generated */}
@@ -211,6 +333,9 @@ export default function DashboardPage() {
                 isBacktesting={isBacktesting}
               />
             )}
+
+            {/* Draft History Panel / 草稿历史面板 */}
+            <DraftHistoryPanel />
           </div>
 
           {/* Middle column - Code preview */}

@@ -3,6 +3,10 @@ node_modules
 .pnp
 .pnp.js
 
+# Bun
+# Note: bun.lockb should be committed for reproducible builds
+# Only ignore if you want to use package-lock.json exclusively
+
 # Testing
 coverage
 

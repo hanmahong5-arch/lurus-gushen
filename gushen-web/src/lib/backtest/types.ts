@@ -795,4 +795,62 @@ export interface BacktestResult {
 
   // Enhanced data (optional, for gradual migration)
   enhanced?: EnhancedBacktestResult;
+
+  // Backtest metadata (Phase 14 UX enhancement)
+  // 回测元数据（Phase 14 用户体验增强）
+  backtestMeta?: {
+    // Target information / 标的信息
+    targetSymbol: string; // Stock code (股票代码, e.g., "600519")
+    targetName: string; // Stock name (股票名称, e.g., "贵州茅台")
+    targetMarket?: string; // Market (市场, e.g., "SH"/"SZ"/"BJ")
+
+    // Data source information / 数据来源信息
+    dataSource: string; // Data source description (数据来源描述)
+    dataSourceType: "historical" | "simulated" | "mixed"; // Data type (数据类型)
+
+    // Time range information / 时间范围信息
+    timeRange: {
+      start: string; // Start date (开始日期, ISO format)
+      end: string; // End date (结束日期, ISO format)
+      totalDays: number; // Total calendar days (总天数)
+      tradingDays: number; // Effective trading days (有效交易日)
+      weekendDays: number; // Weekend days excluded (排除周末天数)
+      holidayDays: number; // Holiday days excluded (排除节假日天数)
+    };
+
+    // Data quality information / 数据质量信息
+    dataQuality: {
+      completeness: number; // Data completeness 0-1 (数据完整性 0-1)
+      missingDays: number; // Number of missing trading days (缺失交易日数量)
+      missingDates?: string[]; // List of missing dates (缺失日期列表)
+      dataPoints: number; // Total data points (总数据点数)
+    };
+
+    // Trading cost configuration / 交易成本配置
+    tradingCosts: {
+      commission: number; // Commission rate (手续费率)
+      commissionType: "percent" | "fixed"; // Commission type (手续费类型)
+      slippage: number; // Slippage rate (滑点率)
+      slippageType: "percent" | "fixed"; // Slippage type (滑点类型)
+      stampDuty?: number; // Stamp duty rate (印花税率, 仅卖出时)
+    };
+
+    // Capital configuration / 资金配置
+    capitalConfig: {
+      initialCapital: number; // Initial capital (初始资金)
+      leverageRatio?: number; // Leverage ratio (杠杆倍数, optional)
+      marginRequirement?: number; // Margin requirement (保证金比例, optional)
+    };
+
+    // Execution configuration / 执行配置
+    executionConfig: {
+      priceType: "close" | "open" | "vwap"; // Execution price type (执行价类型)
+      orderType: "market" | "limit"; // Order type (订单类型)
+      timeframe: string; // Timeframe (时间周期, e.g., "1d")
+    };
+
+    // Generation timestamp / 生成时间戳
+    generatedAt: number; // Unix timestamp (生成时间)
+    version: string; // Backtest engine version (回测引擎版本)
+  };
 }

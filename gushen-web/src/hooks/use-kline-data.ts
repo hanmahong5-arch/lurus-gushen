@@ -20,6 +20,10 @@ import {
   isIntradayTimeframe,
   type KLineFetchResult,
 } from "@/lib/trading/kline-fetcher";
+import {
+  shouldCreateNewBar as shouldCreateNewBarTimeParser,
+  alignToBarStart,
+} from "@/lib/trading/time-parser";
 
 // =============================================================================
 // TYPES / 类型定义
@@ -251,6 +255,9 @@ export function useKLineData(options: UseKLineDataOptions): UseKLineDataResult {
   /**
    * Update the last bar with real-time tick data
    * Used for live updates during trading hours
+   *
+   * ✨ Enhanced to create new bars when crossing time boundaries
+   * 增强版：在跨越时间边界时创建新K线
    */
   const updateLastBar = useCallback((tick: TickData) => {
     setData((prevData) => {
@@ -261,21 +268,41 @@ export function useKLineData(options: UseKLineDataOptions): UseKLineDataResult {
 
       if (!lastBar) return prevData;
 
-      // Update last bar with tick
-      const updatedBar: KLineData = {
-        ...lastBar,
-        close: tick.price,
-        high: Math.max(lastBar.high, tick.price),
-        low: Math.min(lastBar.low, tick.price),
-        volume: lastBar.volume + tick.volume,
-      };
+      // ✅ FIX: Check if we should create a new bar
+      // 检查是否应该创建新K线
+      const currentTime = Math.floor(tick.timestamp / 1000);
 
-      newData[newData.length - 1] = updatedBar;
+      if (shouldCreateNewBarTimeParser(lastBar.time, currentTime, timeframe)) {
+        // Create new bar
+        // 创建新K线
+        const newBarTime = alignToBarStart(currentTime, timeframe);
+        const newBar: KLineData = {
+          time: newBarTime,
+          open: tick.price,
+          high: tick.price,
+          low: tick.price,
+          close: tick.price,
+          volume: tick.volume,
+        };
+        newData.push(newBar);
+      } else {
+        // Update existing bar
+        // 更新现有K线
+        const updatedBar: KLineData = {
+          ...lastBar,
+          close: tick.price,
+          high: Math.max(lastBar.high, tick.price),
+          low: Math.min(lastBar.low, tick.price),
+          volume: lastBar.volume + tick.volume,
+        };
+        newData[newData.length - 1] = updatedBar;
+      }
+
       return newData;
     });
 
     setLastUpdate(new Date());
-  }, []);
+  }, [timeframe]);
 
   /**
    * Effect: Fetch data when parameters change
@@ -370,6 +397,9 @@ export function useKLineData(options: UseKLineDataOptions): UseKLineDataResult {
 // =============================================================================
 
 /**
+ * @deprecated Use shouldCreateNewBar from @/lib/trading/time-parser instead
+ * This version doesn't handle lunch breaks and timezone correctly
+ *
  * Check if data needs a new bar (for intraday timeframes)
  */
 export function shouldCreateNewBar(
@@ -377,60 +407,22 @@ export function shouldCreateNewBar(
   currentTime: number,
   timeframe: TimeFrame,
 ): boolean {
-  const intervalMinutes: Record<TimeFrame, number> = {
-    "1m": 1,
-    "5m": 5,
-    "15m": 15,
-    "30m": 30,
-    "60m": 60,
-    "1d": 1440,
-    "1w": 10080,
-    "1M": 43200,
-  };
-
-  const interval = intervalMinutes[timeframe] * 60; // Convert to seconds
-  return currentTime - lastBarTime >= interval;
+  // Redirect to new implementation
+  return shouldCreateNewBarTimeParser(lastBarTime, currentTime, timeframe);
 }
 
 /**
+ * @deprecated Use alignToBarStart from @/lib/trading/time-parser instead
+ * This version doesn't handle timezone correctly
+ *
  * Get the start time for a new bar
  */
 export function getBarStartTime(
   timestamp: number,
   timeframe: TimeFrame,
 ): number {
-  const date = new Date(timestamp * 1000);
-
-  switch (timeframe) {
-    case "1m":
-      date.setSeconds(0, 0);
-      break;
-    case "5m":
-      date.setMinutes(Math.floor(date.getMinutes() / 5) * 5, 0, 0);
-      break;
-    case "15m":
-      date.setMinutes(Math.floor(date.getMinutes() / 15) * 15, 0, 0);
-      break;
-    case "30m":
-      date.setMinutes(Math.floor(date.getMinutes() / 30) * 30, 0, 0);
-      break;
-    case "60m":
-      date.setMinutes(0, 0, 0);
-      break;
-    case "1d":
-      date.setHours(0, 0, 0, 0);
-      break;
-    case "1w":
-      date.setDate(date.getDate() - date.getDay());
-      date.setHours(0, 0, 0, 0);
-      break;
-    case "1M":
-      date.setDate(1);
-      date.setHours(0, 0, 0, 0);
-      break;
-  }
-
-  return Math.floor(date.getTime() / 1000);
+  // Redirect to new implementation
+  return alignToBarStart(timestamp, timeframe);
 }
 
 /**

@@ -10,6 +10,7 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import { TargetSelector, SelectionMode } from "./target-selector";
 
 // =============================================================================
 // TYPES / 类型定义
@@ -17,7 +18,12 @@ import { Button } from "@/components/ui/button";
 
 export interface ValidationConfig {
   strategy: string;
-  sectorCode: string;
+  // Target selection mode / 目标选择模式
+  selectionMode?: 'sector' | 'stocks'; // Selection mode / 选择模式
+  // Sector mode / 板块模式
+  sectorCode?: string; // Sector code (for sector mode) / 板块代码
+  // Stocks mode / 个股模式
+  selectedSymbols?: string[]; // Selected stock symbols (for stocks mode) / 选中的股票代码
   startDate: string;
   endDate: string;
   holdingDays: number;
@@ -122,7 +128,9 @@ export function ConfigPanel({
   // Form state with enhanced options
   const [config, setConfig] = useState<ValidationConfig>({
     strategy: strategies[0]?.id ?? "macd_golden_cross",
+    selectionMode: 'sector', // Default to sector mode
     sectorCode: sectors[0]?.code ?? "BK0420",
+    selectedSymbols: [], // Empty array for stocks mode
     startDate: defaultDates.startDate,
     endDate: defaultDates.endDate,
     holdingDays: 5,
@@ -144,9 +152,6 @@ export function ConfigPanel({
 
   // UI state
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const [sectorFilter, setSectorFilter] = useState<
-    "all" | "industry" | "concept"
-  >("all");
 
   // Date validation
   const dateError =
@@ -176,15 +181,6 @@ export function ConfigPanel({
   }, [config, onValidate]);
 
   /**
-   * Get filtered sectors based on type
-   * 根据类型获取过滤后的行业
-   */
-  const filteredSectors = sectors.filter((s) => {
-    if (sectorFilter === "all") return true;
-    return s.type === sectorFilter;
-  });
-
-  /**
    * Get selected strategy details
    * 获取选中策略的详情
    */
@@ -205,84 +201,66 @@ export function ConfigPanel({
       </div>
 
       <div className="p-4 space-y-4">
-        {/* Strategy Selection */}
+        {/* Strategy Selection / 策略选择 */}
         <div>
-          <label className="block text-xs text-white/50 mb-2">
-            选择策略 / Select Strategy
+          <label className="block text-xs font-medium text-white/60 mb-2">
+            📊 选择策略 / Select Strategy
           </label>
           <select
             value={config.strategy}
             onChange={(e) =>
               setConfig((prev) => ({ ...prev, strategy: e.target.value }))
             }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-accent/50"
+            className="w-full px-3 py-2.5 bg-gradient-to-br from-white/10 to-white/5 border-2 border-white/20 hover:border-accent/50 rounded-lg text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent shadow-lg transition-all cursor-pointer appearance-none"
+            style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
+              backgroundRepeat: "no-repeat",
+              backgroundPosition: "right 12px center",
+              backgroundSize: "12px",
+              paddingRight: "36px",
+            }}
             data-testid="strategy-select"
+            title={selectedStrategy?.description || "选择一个策略"}
           >
             {strategies.map((strategy) => (
               <option
                 key={strategy.id}
                 value={strategy.id}
-                className="bg-surface"
+                className="bg-surface text-white py-2 hover:bg-accent/20"
               >
-                {strategy.name} / {strategy.nameEn}
+                📈 {strategy.name} / {strategy.nameEn}
               </option>
             ))}
           </select>
           {selectedStrategy && (
-            <p className="mt-1 text-xs text-white/40">
-              {selectedStrategy.description}
+            <p className="mt-2 text-xs text-white/50 bg-white/5 p-2 rounded border border-white/10">
+              💡 {selectedStrategy.description}
             </p>
           )}
         </div>
 
-        {/* Sector Selection */}
+        {/* Target Selection (Sector or Stocks) */}
         <div>
-          <label className="block text-xs text-white/50 mb-2">
-            选择行业 / Select Sector
+          <label className="block text-xs text-white/50 mb-3">
+            选择目标 / Select Target
           </label>
-
-          {/* Sector Type Filter */}
-          <div className="flex gap-2 mb-2">
-            {[
-              { value: "all", label: "全部" },
-              { value: "industry", label: "行业" },
-              { value: "concept", label: "概念" },
-            ].map((filter) => (
-              <button
-                key={filter.value}
-                onClick={() =>
-                  setSectorFilter(filter.value as typeof sectorFilter)
-                }
-                className={`px-2 py-1 text-xs rounded transition ${
-                  sectorFilter === filter.value
-                    ? "bg-accent text-primary-600"
-                    : "bg-white/5 text-white/60 hover:bg-white/10"
-                }`}
-              >
-                {filter.label}
-              </button>
-            ))}
-          </div>
-
-          <select
-            value={config.sectorCode}
-            onChange={(e) =>
-              setConfig((prev) => ({ ...prev, sectorCode: e.target.value }))
+          <TargetSelector
+            mode={config.selectionMode || 'sector'}
+            onModeChange={(mode) =>
+              setConfig((prev) => ({ ...prev, selectionMode: mode }))
             }
-            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-accent/50"
-            data-testid="sector-select"
-          >
-            {filteredSectors.map((sector) => (
-              <option
-                key={sector.code}
-                value={sector.code}
-                className="bg-surface"
-              >
-                {sector.name} / {sector.nameEn}
-                {sector.type === "concept" && " [概念]"}
-              </option>
-            ))}
-          </select>
+            sectorCode={config.sectorCode}
+            onSectorChange={(sectorCode) =>
+              setConfig((prev) => ({ ...prev, sectorCode }))
+            }
+            sectors={sectors}
+            selectedSymbols={config.selectedSymbols || []}
+            onSymbolsChange={(symbols) =>
+              setConfig((prev) => ({ ...prev, selectedSymbols: symbols }))
+            }
+            maxStocks={config.maxStocks || 100}
+            excludeST={config.excludeSTStocks ?? true}
+          />
         </div>
 
         {/* Date Range */}
@@ -712,10 +690,14 @@ export function ConfigPanel({
               </span>
             </div>
             <div className="flex justify-between">
-              <span>行业:</span>
+              <span>目标:</span>
               <span className="text-white">
-                {sectors.find((s) => s.code === config.sectorCode)?.name ??
-                  config.sectorCode}
+                {config.selectionMode === 'stocks' ? (
+                  `${config.selectedSymbols?.length ?? 0} 只个股`
+                ) : (
+                  sectors.find((s) => s.code === config.sectorCode)?.name ??
+                  config.sectorCode
+                )}
               </span>
             </div>
             <div className="flex justify-between">
