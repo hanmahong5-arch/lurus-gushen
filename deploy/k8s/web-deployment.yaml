@@ -1,0 +1,116 @@
+# ============================================
+# AI-QTRD Web Frontend Deployment
+# Next.js Application for Gushen
+# Managed by ArgoCD for GitOps deployment
+# ============================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-qtrd-web
+  namespace: ai-qtrd
+  labels:
+    app: ai-qtrd-web
+    component: frontend
+    app.kubernetes.io/name: ai-qtrd
+    app.kubernetes.io/component: web
+    app.kubernetes.io/managed-by: argocd
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ai-qtrd-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: ai-qtrd-web
+        component: frontend
+    spec:
+      # Schedule on worker node (cloud-ubuntu-3-2c2g)
+      nodeSelector:
+        kubernetes.io/hostname: cloud-ubuntu-3-2c2g
+
+      containers:
+        - name: web
+          image: ghcr.io/hanmahong5-arch/gushen-web:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000
+              name: http
+
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: PORT
+              value: "3000"
+            - name: HOSTNAME
+              value: "0.0.0.0"
+            # API proxy configuration
+            - name: API_URL
+              value: "http://ai-qtrd-api:8000"
+
+            # Redis configuration
+            - name: REDIS_ENABLED
+              value: "true"
+            - name: REDIS_HOST
+              value: "redis-service.ai-qtrd.svc.cluster.local"
+            - name: REDIS_PORT
+              value: "6379"
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ai-qtrd-secrets
+                  key: REDIS_PASSWORD
+            - name: REDIS_DB
+              value: "0"
+
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+
+      restartPolicy: Always
+---
+# Web Service (ClusterIP for internal access)
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-qtrd-web
+  namespace: ai-qtrd
+  labels:
+    app: ai-qtrd-web
+    component: frontend
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app: ai-qtrd-web

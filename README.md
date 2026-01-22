@@ -144,6 +144,15 @@ kubectl rollout restart deployment/ai-qtrd-web -n ai-qtrd
   - API 客户端 (重试/超时/取消/外部系统集成)
   - 事件系统 (类型化事件发射器)
   - 错误边界和加载状态组件
+- [x] **Phase 15**: 组件健壮性强化 + 边缘情况测试 (2026-01-22)
+  - 4个核心组件重写为健壮版本 (95%+ 边缘情况覆盖)
+    - EnhancedTradeCard: null安全、NaN/Infinity处理、长文本截断
+    - BacktestBasisPanel: 元数据回退、除零保护、数据质量徽章
+    - ParameterInfoDialog: 数组验证、回调安全、增强信息回退
+    - BacktestPanel: 100+交易压力测试、错误注入处理
+  - Vitest + React Testing Library 测试框架配置
+  - 75+ 边缘情况测试用例 (4个测试文件)
+  - 测试覆盖: 数值边缘(NaN/Infinity/1e15)、字符串边缘(null/空/长文本)、数组边缘、日期格式、错误回调
 
 ### 前端页面
 - `/` - 首页

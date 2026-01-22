@@ -1,0 +1,13 @@
+# Kustomization for AI-QTRD (GuShen) ArgoCD deployment
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ai-qtrd
+
+resources:
+  - namespace.yaml
+  - web-deployment.yaml
+
+commonLabels:
+  app.kubernetes.io/part-of: lurus
+  app.kubernetes.io/managed-by: argocd
