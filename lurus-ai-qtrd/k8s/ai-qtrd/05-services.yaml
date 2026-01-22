@@ -42,3 +42,4 @@ spec:
       protocol: TCP
   selector:
     app: ai-qtrd-web
+    component: frontend
