@@ -25,10 +25,25 @@ import type { BacktestResult } from "@/lib/backtest/types";
 // Props Interface
 // =============================================================================
 
+/**
+ * Enhanced data source info from API
+ * API返回的增强数据源信息
+ */
+interface EnhancedDataSourceInfo {
+  type: "real" | "simulated" | "mixed";
+  provider: string;
+  reason: string;
+  fallbackUsed: boolean;
+  realDataCount: number;
+  simulatedDataCount: number;
+}
+
 interface BacktestBasisPanelProps {
   result: BacktestResult | null | undefined;
   className?: string;
   onError?: (error: Error) => void;
+  /** Enhanced data source info from backtest API */
+  dataSourceInfo?: EnhancedDataSourceInfo | null;
 }
 
 // =============================================================================
@@ -227,12 +242,12 @@ function getMarketName(market: string | null | undefined): string {
 // Component
 // =============================================================================
 
-export function BacktestBasisPanel({ result, className, onError }: BacktestBasisPanelProps) {
+export function BacktestBasisPanel({ result, className, onError, dataSourceInfo }: BacktestBasisPanelProps) {
   // Handle null/undefined result
   if (!result) {
     return (
-      <div className={cn("p-4 bg-primary/30 rounded-lg border border-border", className)}>
-        <div className="text-sm text-white/40 text-center py-2">回测依据信息不可用</div>
+      <div className={cn("p-4 bg-surface/50 rounded-lg border border-white/5", className)}>
+        <div className="text-sm text-neutral-500 text-center py-2">回测依据信息不可用</div>
       </div>
     );
   }
@@ -250,25 +265,26 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
       const initialCapital = config?.initialCapital ?? 0;
 
       return (
-        <div className={cn("p-4 bg-primary/30 rounded-lg border border-border", className)}>
-          <h3 className="text-sm font-semibold text-white mb-3 flex items-center gap-2">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className={cn("p-4 bg-surface/50 rounded-lg border border-white/5", className)}>
+          <h3 className="text-sm font-semibold text-neutral-200 mb-3 flex items-center gap-2">
+            <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
-            回测依据 | Backtest Basis
+            回测依据
+            <span className="text-neutral-600 text-xs font-normal">Backtest Basis</span>
           </h3>
-          <div className="space-y-2 text-xs text-white/60">
-            <div>
-              <span className="text-white/40">测试标的: </span>
-              <span className="text-white">{truncateText(symbol, 30)}</span>
+          <div className="space-y-2 text-xs">
+            <div className="flex justify-between items-center">
+              <span className="text-neutral-500">测试标的</span>
+              <span className="text-neutral-200 font-medium">{truncateText(symbol, 30)}</span>
             </div>
-            <div>
-              <span className="text-white/40">时间范围: </span>
-              <span className="text-white">{startDate} ~ {endDate}</span>
+            <div className="flex justify-between items-center">
+              <span className="text-neutral-500">时间范围</span>
+              <span className="text-neutral-300 font-mono tabular-nums">{startDate} ~ {endDate}</span>
             </div>
-            <div>
-              <span className="text-white/40">初始资金: </span>
-              <span className="text-white">{formatCurrency(initialCapital)}</span>
+            <div className="flex justify-between items-center">
+              <span className="text-neutral-500">初始资金</span>
+              <span className="text-neutral-200 font-mono tabular-nums">{formatCurrency(initialCapital)}</span>
             </div>
           </div>
         </div>
@@ -324,97 +340,196 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
     const version = truncateText(meta.version, 20) || "未知版本";
     const generatedAt = meta.generatedAt || null;
 
+    // Determine effective data source type from enhanced info or meta
+    const effectiveDataType = dataSourceInfo?.type ?? (dataSourceType === "historical" ? "real" : dataSourceType);
+    const isSimulatedData = effectiveDataType === "simulated" || dataSourceInfo?.fallbackUsed;
+
     return (
-      <div className={cn("p-4 bg-primary/30 rounded-lg border border-border", className)}>
+      <div className={cn("p-4 bg-surface/50 rounded-lg border border-white/5", className)}>
         {/* ===== Panel Header ===== */}
-        <h3 className="text-sm font-semibold text-white mb-4 flex items-center gap-2">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <h3 className="text-sm font-semibold text-neutral-200 mb-4 flex items-center gap-2">
+          <svg className="w-4 h-4 text-neutral-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
-          回测依据 | Backtest Basis
+          回测依据
+          <span className="text-neutral-600 text-xs font-normal">Backtest Basis</span>
         </h3>
+
+        {/* ===== Simulated Data Warning Banner ===== */}
+        {isSimulatedData && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg">
+            <div className="flex items-start gap-3">
+              <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-amber-400 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-amber-400 mb-0.5">
+                  使用模拟数据回测
+                </div>
+                <div className="text-xs text-neutral-400">
+                  {dataSourceInfo?.fallbackUsed ? (
+                    <>
+                      无法获取真实市场数据，已自动切换到模拟数据
+                      <span className="block text-neutral-500 mt-0.5">
+                        原因: {dataSourceInfo.reason}
+                      </span>
+                    </>
+                  ) : (
+                    "当前回测基于随机生成的模拟K线数据，结果仅供参考"
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ===== Real Data Success Badge ===== */}
+        {effectiveDataType === "real" && !isSimulatedData && (
+          <div className="mb-4 p-3 bg-profit/10 border border-profit/20 rounded-lg">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-profit/20 flex items-center justify-center shrink-0">
+                <svg className="w-4 h-4 text-profit" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-profit">
+                  真实历史数据回测
+                </div>
+                <div className="text-xs text-neutral-400">
+                  已获取 <span className="font-mono tabular-nums text-neutral-300">{dataSourceInfo?.realDataCount ?? dataPoints}</span> 条真实K线数据
+                  {dataSourceInfo?.provider && (
+                    <span className="text-neutral-500"> (来源: {dataSourceInfo.provider})</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* ===== Info Grid ===== */}
         <div className="space-y-3">
           {/* Section 1: Target Information */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">测试标的 | Target</h4>
+          <div className="p-3 bg-void/30 rounded-lg border border-white/5">
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+              </svg>
+              测试标的
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">股票代码</span>
-                <span className="text-white font-medium" title={meta.targetSymbol}>
+                <span className="text-neutral-500">股票代码</span>
+                <span className="text-neutral-200 font-medium font-mono" title={meta.targetSymbol}>
                   {targetSymbol}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">股票名称</span>
-                <span className="text-white font-medium" title={meta.targetName}>
+                <span className="text-neutral-500">股票名称</span>
+                <span className="text-neutral-200 font-medium" title={meta.targetName}>
                   {targetName}
                 </span>
               </div>
               {targetMarket && (
                 <div className="flex items-center justify-between">
-                  <span className="text-white/40">交易市场</span>
-                  <span className="text-white/80">{getMarketName(targetMarket)}</span>
+                  <span className="text-neutral-500">交易市场</span>
+                  <span className="text-neutral-400">{getMarketName(targetMarket)}</span>
                 </div>
               )}
             </div>
           </div>
 
-          {/* Section 2: Data Source */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">数据来源 | Data Source</h4>
+          {/* Section 2: Data Source (Enhanced) */}
+          <div className={cn(
+            "p-3 rounded-lg border",
+            isSimulatedData
+              ? "bg-amber-500/5 border-amber-500/20"
+              : "bg-void/30 border-white/5"
+          )}>
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4" />
+              </svg>
+              数据来源
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">数据提供商</span>
-                <span className="text-white/80" title={meta.dataSource}>
-                  {dataSource}
+                <span className="text-neutral-500">数据提供商</span>
+                <span className="text-neutral-300" title={dataSourceInfo?.provider || meta.dataSource}>
+                  {dataSourceInfo?.provider || dataSource}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">数据类型</span>
-                <span
-                  className={cn(
-                    "px-1.5 py-0.5 rounded font-medium",
-                    dataSourceType === "historical"
-                      ? "bg-profit/20 text-profit"
-                      : dataSourceType === "simulated"
-                      ? "bg-yellow-500/20 text-yellow-400"
-                      : "bg-blue-500/20 text-blue-400"
+                <span className="text-neutral-500">数据类型</span>
+                <div className="flex items-center gap-1.5">
+                  {/* Enhanced data type badge with icon */}
+                  {effectiveDataType === "real" && !isSimulatedData ? (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full font-medium text-[10px] bg-profit/20 text-profit border border-profit/30">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                      </svg>
+                      实盘历史
+                    </span>
+                  ) : effectiveDataType === "simulated" || isSimulatedData ? (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full font-medium text-[10px] bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                      <svg className="w-3 h-3 animate-pulse" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01" />
+                      </svg>
+                      模拟数据
+                    </span>
+                  ) : (
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full font-medium text-[10px] bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01" />
+                      </svg>
+                      混合数据
+                    </span>
                   )}
-                >
-                  {dataSourceType === "historical"
-                    ? "实盘历史"
-                    : dataSourceType === "simulated"
-                    ? "模拟数据"
-                    : "混合数据"}
-                </span>
+                </div>
               </div>
+              {/* Show data counts if available */}
+              {dataSourceInfo && (dataSourceInfo.realDataCount > 0 || dataSourceInfo.simulatedDataCount > 0) && (
+                <div className="flex items-center justify-between text-[10px] pt-1.5 border-t border-white/5 mt-1.5">
+                  <span className="text-neutral-600">数据统计</span>
+                  <span className="text-neutral-500 font-mono tabular-nums">
+                    {dataSourceInfo.realDataCount > 0 && `真实: ${dataSourceInfo.realDataCount}条`}
+                    {dataSourceInfo.realDataCount > 0 && dataSourceInfo.simulatedDataCount > 0 && " / "}
+                    {dataSourceInfo.simulatedDataCount > 0 && `模拟: ${dataSourceInfo.simulatedDataCount}条`}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
           {/* Section 3: Time Range */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">时间范围 | Time Range</h4>
+          <div className="p-3 bg-void/30 rounded-lg border border-white/5">
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+              时间范围
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">起止日期</span>
-                <span className="text-white/80 font-mono">
+                <span className="text-neutral-500">起止日期</span>
+                <span className="text-neutral-300 font-mono tabular-nums">
                   {startDate} ~ {endDate}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">总天数</span>
-                <span className="text-white/80">
+                <span className="text-neutral-500">总天数</span>
+                <span className="text-neutral-300 font-mono tabular-nums">
                   {formatNumber(totalDays)}天
                   {yearsCount > 0 && (
-                    <span className="text-white/40 ml-1">({yearsCount.toFixed(1)}年)</span>
+                    <span className="text-neutral-500 ml-1">({yearsCount.toFixed(1)}年)</span>
                   )}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">有效交易日</span>
-                <span className="text-white font-medium">
+                <span className="text-neutral-500">有效交易日</span>
+                <span className="text-neutral-200 font-medium font-mono tabular-nums">
                   {formatNumber(tradingDays)}天
                   {totalDays > 0 && (
                     <span className="text-profit ml-1">({tradingDayPercent.toFixed(1)}%)</span>
@@ -423,30 +538,35 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
               </div>
               {weekendDays > 0 && (
                 <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-white/30">排除周末</span>
-                  <span className="text-white/50">{formatNumber(weekendDays)}天</span>
+                  <span className="text-neutral-600">排除周末</span>
+                  <span className="text-neutral-500 font-mono tabular-nums">{formatNumber(weekendDays)}天</span>
                 </div>
               )}
               {holidayDays > 0 && (
                 <div className="flex items-center justify-between text-[10px]">
-                  <span className="text-white/30">排除节假日</span>
-                  <span className="text-white/50">{formatNumber(holidayDays)}天</span>
+                  <span className="text-neutral-600">排除节假日</span>
+                  <span className="text-neutral-500 font-mono tabular-nums">{formatNumber(holidayDays)}天</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Section 4: Data Quality */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">数据质量 | Data Quality</h4>
+          <div className="p-3 bg-void/30 rounded-lg border border-white/5">
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              数据质量
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">数据完整性</span>
+                <span className="text-neutral-500">数据完整性</span>
                 <div className="flex items-center gap-2">
-                  <span className="text-white font-medium">{formatPercent(completeness)}</span>
+                  <span className="text-neutral-200 font-medium font-mono tabular-nums">{formatPercent(completeness)}</span>
                   <span
                     className={cn(
-                      "px-1.5 py-0.5 rounded text-[10px] font-medium bg-white/10",
+                      "px-1.5 py-0.5 rounded text-[10px] font-medium bg-surface",
                       qualityBadge.color
                     )}
                   >
@@ -455,46 +575,51 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
                 </div>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">数据点数量</span>
-                <span className="text-white/80 font-mono">{formatNumber(dataPoints)}条</span>
+                <span className="text-neutral-500">数据点数量</span>
+                <span className="text-neutral-300 font-mono tabular-nums">{formatNumber(dataPoints)}条</span>
               </div>
               {missingDays > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-white/40">缺失交易日</span>
-                  <span className="text-orange-400 font-medium">{formatNumber(missingDays)}天</span>
+                  <span className="text-neutral-500">缺失交易日</span>
+                  <span className="text-amber-400 font-medium font-mono tabular-nums">{formatNumber(missingDays)}天</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Section 5: Trading Costs */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">交易成本 | Trading Costs</h4>
+          <div className="p-3 bg-void/30 rounded-lg border border-white/5">
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              交易成本
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">手续费</span>
-                <span className="text-white/80">
-                  {formatPercent(commission)}
-                  <span className="text-white/40 ml-1">
+                <span className="text-neutral-500">手续费</span>
+                <span className="text-neutral-300">
+                  <span className="font-mono tabular-nums">{formatPercent(commission)}</span>
+                  <span className="text-neutral-500 ml-1">
                     ({commissionType === "percent" ? "按比例" : "固定金额"})
                   </span>
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">滑点</span>
-                <span className="text-white/80">
-                  {formatPercent(slippage)}
-                  <span className="text-white/40 ml-1">
+                <span className="text-neutral-500">滑点</span>
+                <span className="text-neutral-300">
+                  <span className="font-mono tabular-nums">{formatPercent(slippage)}</span>
+                  <span className="text-neutral-500 ml-1">
                     ({slippageType === "percent" ? "按比例" : "固定金额"})
                   </span>
                 </span>
               </div>
               {stampDuty !== null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-white/40">印花税</span>
-                  <span className="text-white/80">
-                    {formatPercent(stampDuty)}
-                    <span className="text-white/40 ml-1">(仅卖出)</span>
+                  <span className="text-neutral-500">印花税</span>
+                  <span className="text-neutral-300">
+                    <span className="font-mono tabular-nums">{formatPercent(stampDuty)}</span>
+                    <span className="text-neutral-500 ml-1">(仅卖出)</span>
                   </span>
                 </div>
               )}
@@ -502,39 +627,49 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
           </div>
 
           {/* Section 6: Capital Configuration */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">资金配置 | Capital</h4>
+          <div className="p-3 bg-void/30 rounded-lg border border-white/5">
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+              </svg>
+              资金配置
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">初始资金</span>
+                <span className="text-neutral-500">初始资金</span>
                 <span
-                  className={cn("font-medium", initialCapital < 0 ? "text-loss" : "text-white")}
+                  className={cn("font-medium font-mono tabular-nums", initialCapital < 0 ? "text-loss" : "text-neutral-200")}
                 >
                   {formatCurrency(initialCapital)}
                 </span>
               </div>
               {leverageRatio !== null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-white/40">杠杆倍数</span>
-                  <span className="text-white/80">{leverageRatio.toFixed(1)}倍</span>
+                  <span className="text-neutral-500">杠杆倍数</span>
+                  <span className="text-neutral-300 font-mono tabular-nums">{leverageRatio.toFixed(1)}倍</span>
                 </div>
               )}
               {marginRequirement !== null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-white/40">保证金比例</span>
-                  <span className="text-white/80">{formatPercent(marginRequirement)}</span>
+                  <span className="text-neutral-500">保证金比例</span>
+                  <span className="text-neutral-300 font-mono tabular-nums">{formatPercent(marginRequirement)}</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Section 7: Execution Configuration */}
-          <div className="p-3 bg-background/40 rounded-lg border border-border/50">
-            <h4 className="text-xs font-medium text-white/60 mb-2">执行配置 | Execution</h4>
+          <div className="p-3 bg-void/30 rounded-lg border border-white/5">
+            <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+              </svg>
+              执行配置
+            </h4>
             <div className="space-y-1.5 text-xs">
               <div className="flex items-center justify-between">
-                <span className="text-white/40">成交价格</span>
-                <span className="text-white/80">
+                <span className="text-neutral-500">成交价格</span>
+                <span className="text-neutral-300">
                   {priceType === "close"
                     ? "收盘价"
                     : priceType === "open"
@@ -545,23 +680,23 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">订单类型</span>
-                <span className="text-white/80">
+                <span className="text-neutral-500">订单类型</span>
+                <span className="text-neutral-300">
                   {orderType === "market" ? "市价单" : "限价单"}
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-white/40">时间周期</span>
-                <span className="text-white/80 font-mono">{timeframe}</span>
+                <span className="text-neutral-500">时间周期</span>
+                <span className="text-neutral-300 font-mono">{timeframe}</span>
               </div>
             </div>
           </div>
         </div>
 
         {/* ===== Footer ===== */}
-        <div className="mt-3 pt-3 border-t border-border/30 flex items-center justify-between text-[10px] text-white/30">
-          <span title={meta.version}>回测引擎: {version}</span>
-          <span>{generatedAt ? formatDate(generatedAt) : "未知时间"}</span>
+        <div className="mt-3 pt-3 border-t border-white/5 flex items-center justify-between text-[10px] text-neutral-600">
+          <span title={meta.version} className="font-mono">回测引擎: {version}</span>
+          <span className="font-mono tabular-nums">{generatedAt ? formatDate(generatedAt) : "未知时间"}</span>
         </div>
       </div>
     );
@@ -571,9 +706,14 @@ export function BacktestBasisPanel({ result, className, onError }: BacktestBasis
     onError?.(error instanceof Error ? error : new Error(String(error)));
 
     return (
-      <div className={cn("p-4 rounded-lg border border-error bg-error/5", className)}>
-        <div className="text-sm text-error text-center py-2">回测依据渲染失败</div>
-        <div className="text-xs text-white/40 text-center mt-1">
+      <div className={cn("p-4 rounded-lg border border-loss/30 bg-loss/5", className)}>
+        <div className="flex items-center justify-center gap-2 text-sm text-loss py-2">
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          回测依据渲染失败
+        </div>
+        <div className="text-xs text-neutral-500 text-center mt-1 font-mono">
           {error instanceof Error ? error.message : String(error)}
         </div>
       </div>

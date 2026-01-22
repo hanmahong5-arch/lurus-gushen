@@ -5,11 +5,14 @@
  * Uses happy-dom for fast DOM simulation
  */
 import { defineConfig } from 'vitest/config';
-import react from '@vitejs/plugin-react';
 import path from 'path';
 
 export default defineConfig({
-  plugins: [react()],
+  // Use esbuild for JSX transformation (no plugin needed)
+  esbuild: {
+    jsx: 'automatic',
+    jsxImportSource: 'react',
+  },
   test: {
     // Use happy-dom for fast DOM simulation
     environment: 'happy-dom',

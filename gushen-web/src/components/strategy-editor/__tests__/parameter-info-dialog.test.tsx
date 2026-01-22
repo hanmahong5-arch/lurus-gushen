@@ -329,7 +329,8 @@ describe('ParameterInfoDialog', () => {
 
       // Find and click an "应用" button
       const applyButtons = screen.getAllByText('应用');
-      await userEvent.click(applyButtons[0]);
+      expect(applyButtons.length).toBeGreaterThan(0);
+      await userEvent.click(applyButtons[0]!);
 
       expect(onApplyValue).toHaveBeenCalledTimes(1);
       expect(onApplyValue).toHaveBeenCalledWith(10); // First commonValue
@@ -366,7 +367,8 @@ describe('ParameterInfoDialog', () => {
       );
 
       const applyButtons = screen.getAllByText('应用');
-      await userEvent.click(applyButtons[0]);
+      expect(applyButtons.length).toBeGreaterThan(0);
+      await userEvent.click(applyButtons[0]!);
 
       expect(onError).toHaveBeenCalledWith(expect.any(Error));
     });
@@ -432,8 +434,9 @@ describe('ParameterInfoDialog', () => {
         />
       );
 
-      // Should fall back to parameter name
-      expect(screen.getByText('testParam')).toBeInTheDocument();
+      // Should fall back to parameter name (may appear in multiple places)
+      const paramNameElements = screen.getAllByText('testParam');
+      expect(paramNameElements.length).toBeGreaterThan(0);
     });
 
     it('handles null description', () => {

@@ -28,6 +28,7 @@ import type {
   AdvisorContext,
   ChatMode,
   DebateSession,
+  DebateArgument,
   InvestmentPhilosophy,
 } from "@/lib/advisor/agent/types";
 import {
@@ -38,6 +39,96 @@ import {
   getMasterAgentSummaries,
   getMasterAgentById,
 } from "@/lib/advisor/agent/master-agents";
+
+// =============================================================================
+// VALIDATION HELPERS / 数据验证辅助函数
+// =============================================================================
+
+/**
+ * Validate if an object is a valid DebateSession
+ * 验证对象是否为有效的 DebateSession
+ */
+function validateDebateSession(data: unknown): DebateSession | null {
+  if (!data || typeof data !== "object") {
+    console.error("[Debate] Invalid session data: not an object");
+    return null;
+  }
+
+  const session = data as Record<string, unknown>;
+
+  // Check required fields
+  if (typeof session.id !== "string" || !session.id) {
+    console.error("[Debate] Invalid session: missing or invalid id");
+    return null;
+  }
+
+  if (typeof session.topic !== "string" || !session.topic) {
+    console.error("[Debate] Invalid session: missing or invalid topic");
+    return null;
+  }
+
+  if (typeof session.rounds !== "number" || session.rounds <= 0) {
+    console.error("[Debate] Invalid session: missing or invalid rounds");
+    return null;
+  }
+
+  if (!session.participants || typeof session.participants !== "object") {
+    console.error("[Debate] Invalid session: missing participants");
+    return null;
+  }
+
+  // Build safe session object with defaults
+  return {
+    id: session.id,
+    topic: session.topic,
+    symbol: typeof session.symbol === "string" ? session.symbol : undefined,
+    rounds: session.rounds,
+    participants: session.participants as DebateSession["participants"],
+    arguments: Array.isArray(session.arguments) ? session.arguments : [],
+    conclusion: session.conclusion as DebateSession["conclusion"] | undefined,
+    createdAt: session.createdAt instanceof Date ? session.createdAt : new Date(),
+  };
+}
+
+/**
+ * Validate if an object is a valid DebateArgument
+ * 验证对象是否为有效的 DebateArgument
+ */
+function validateDebateArgument(data: unknown): DebateArgument | null {
+  if (!data || typeof data !== "object") {
+    console.error("[Debate] Invalid argument data: not an object");
+    return null;
+  }
+
+  const arg = data as Record<string, unknown>;
+
+  // Check required fields
+  if (typeof arg.round !== "number") {
+    console.error("[Debate] Invalid argument: missing round");
+    return null;
+  }
+
+  if (!["bull", "bear", "neutral"].includes(arg.stance as string)) {
+    console.error("[Debate] Invalid argument: invalid stance", arg.stance);
+    return null;
+  }
+
+  if (typeof arg.content !== "string") {
+    console.error("[Debate] Invalid argument: missing content");
+    return null;
+  }
+
+  // Build safe argument object with defaults
+  return {
+    round: arg.round,
+    stance: arg.stance as DebateArgument["stance"],
+    agentId: typeof arg.agentId === "string" ? arg.agentId : "unknown",
+    content: arg.content,
+    keyPoints: Array.isArray(arg.keyPoints) ? arg.keyPoints : [],
+    evidence: Array.isArray(arg.evidence) ? arg.evidence : undefined,
+    timestamp: arg.timestamp instanceof Date ? arg.timestamp : new Date(),
+  };
+}
 
 // Message type definition
 interface Message {
@@ -241,7 +332,13 @@ export function AdvisorChat({
       }
 
       const startData = await startResponse.json();
-      const session = startData.session as DebateSession;
+
+      // Validate session data before using it (fix for client-side exception)
+      const session = validateDebateSession(startData.session);
+      if (!session) {
+        throw new Error("无法启动辩论：服务器返回的数据格式无效 / Invalid debate session data from server");
+      }
+
       setDebateSession(session);
 
       // Extract symbol info from topic if possible (e.g., "贵州茅台是否值得持有")
@@ -266,12 +363,23 @@ export function AdvisorChat({
 
       if (bullResponse.ok) {
         const bullData = await bullResponse.json();
-        bullArguments.push(bullData.argument?.content || "");
-        setDebateSession((prev) =>
-          prev
-            ? { ...prev, arguments: [...prev.arguments, bullData.argument] }
-            : null,
-        );
+
+        // Validate argument data before using it
+        const validatedArgument = validateDebateArgument(bullData.argument);
+        if (validatedArgument) {
+          bullArguments.push(validatedArgument.content);
+          setDebateSession((prev) =>
+            prev
+              ? { ...prev, arguments: [...prev.arguments, validatedArgument] }
+              : null,
+          );
+        } else {
+          console.warn("[Debate] Bull argument validation failed, using raw content");
+          // Fallback: use raw content if available
+          if (bullData.argument?.content) {
+            bullArguments.push(bullData.argument.content);
+          }
+        }
       } else {
         const errorData = await bullResponse.json().catch(() => ({}));
         console.error("[Debate] Bull argument failed:", errorData);
@@ -298,12 +406,23 @@ export function AdvisorChat({
 
       if (bearResponse.ok) {
         const bearData = await bearResponse.json();
-        bearArguments.push(bearData.argument?.content || "");
-        setDebateSession((prev) =>
-          prev
-            ? { ...prev, arguments: [...prev.arguments, bearData.argument] }
-            : null,
-        );
+
+        // Validate argument data before using it
+        const validatedArgument = validateDebateArgument(bearData.argument);
+        if (validatedArgument) {
+          bearArguments.push(validatedArgument.content);
+          setDebateSession((prev) =>
+            prev
+              ? { ...prev, arguments: [...prev.arguments, validatedArgument] }
+              : null,
+          );
+        } else {
+          console.warn("[Debate] Bear argument validation failed, using raw content");
+          // Fallback: use raw content if available
+          if (bearData.argument?.content) {
+            bearArguments.push(bearData.argument.content);
+          }
+        }
       } else {
         const errorData = await bearResponse.json().catch(() => ({}));
         console.error("[Debate] Bear argument failed:", errorData);
@@ -346,7 +465,25 @@ export function AdvisorChat({
       };
       setMessages((prev) => [...prev, summaryMessage]);
     } catch (err) {
-      throw err;
+      // Handle debate errors gracefully instead of crashing
+      // 优雅处理辩论错误，避免崩溃
+      console.error("[Debate] Error during debate:", err);
+
+      const errorMessage =
+        err instanceof Error ? err.message : "辩论过程中发生未知错误";
+
+      // Set error state to display in UI
+      setError(`多空辩论失败: ${errorMessage}`);
+
+      // Add error message to chat for user visibility
+      const errorChatMessage: Message = {
+        id: generateId(),
+        role: "assistant",
+        content: `【辩论失败】\n\n很抱歉，多空辩论过程中遇到了问题：\n${errorMessage}\n\n请稍后重试，或尝试其他分析模式。`,
+        timestamp: new Date(),
+        metadata: { mode: "debate" },
+      };
+      setMessages((prev) => [...prev, errorChatMessage]);
     }
   };
 

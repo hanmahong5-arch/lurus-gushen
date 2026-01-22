@@ -28,19 +28,12 @@ import type { LotCalculation } from '@/lib/backtest/lot-size';
  */
 function createMockTrade(overrides: Partial<DetailedTrade> = {}): DetailedTrade {
   const baseLotCalculation: LotCalculation = {
-    availableCash: 100000,
-    price: 50,
-    commission: 0.0003,
-    slippage: 0.001,
-    maxAffordableLots: 19,
-    maxAffordableShares: 1900,
-    totalCost: 65.65,
+    requestedQuantity: 1000,
     lotSize: 100,
-    assetType: 'A-share',
-    requestedLots: 10,
-    finalLots: 10,
-    finalShares: 1000,
-    orderValue: 50000,
+    actualLots: 10,
+    actualQuantity: 1000,
+    roundingLoss: 0,
+    roundingLossPercent: 0,
   };
 
   return {
@@ -245,7 +238,8 @@ describe('EnhancedTradeCard', () => {
 
       render(<EnhancedTradeCard trade={trade} />);
 
-      expect(screen.getByText('10.50手 (1,050股)')).toBeInTheDocument();
+      // Fractional lots don't use toLocaleString for quantity
+      expect(screen.getByText('10.50手 (1050股)')).toBeInTheDocument();
     });
 
     it('formats extreme P&L percentage (>1000%) correctly', () => {

@@ -728,6 +728,45 @@ export function updateStrategyCode(
 }
 
 /**
+ * Update a single parameter in strategy code by name and value
+ * 按名称和值更新策略代码中的单个参数
+ *
+ * @param code - Original strategy code
+ * @param paramName - Name of the parameter to update
+ * @param value - New value for the parameter
+ * @returns Updated strategy code
+ */
+export function updateParameterInCode(
+  code: string,
+  paramName: string,
+  value: number | string | boolean,
+): string {
+  // Determine type from value
+  let type: ParameterType;
+  if (typeof value === "boolean") {
+    type = "boolean";
+  } else if (typeof value === "string") {
+    type = "string";
+  } else {
+    type = "number";
+  }
+
+  // Create a synthetic parameter object
+  const param: StrategyParameter = {
+    name: paramName,
+    displayName: paramName,
+    value: value,
+    defaultValue: value,
+    type: type,
+    description: "",
+    category: "general",
+    editable: true,
+  };
+
+  return updateStrategyCode(code, [param]);
+}
+
+/**
  * Validate parameter value against range
  * 验证参数值是否在有效范围内
  */
@@ -777,6 +816,201 @@ export function validateAllParameters(
   }
 
   return { isValid, errors };
+}
+
+// =============================================================================
+// CROSS-PARAMETER VALIDATION / 跨参数验证
+// =============================================================================
+
+/**
+ * Cross-parameter validation rule
+ * 跨参数验证规则
+ */
+export interface CrossParameterRule {
+  name: string; // Rule name (规则名称)
+  description: string; // Description (描述)
+  descriptionEn: string; // English description
+  validate: (params: Map<string, number | boolean | string | number[]>) => boolean;
+  errorMessage: string; // Chinese error message
+  errorMessageEn: string; // English error message
+  affectedParams: string[]; // Parameters involved in this rule
+}
+
+/**
+ * Predefined cross-parameter validation rules
+ * 预定义的跨参数验证规则
+ */
+const CROSS_PARAMETER_RULES: CrossParameterRule[] = [
+  // MA fast/slow window validation
+  {
+    name: "ma_window_order",
+    description: "快线周期必须小于慢线周期",
+    descriptionEn: "Fast window must be less than slow window",
+    validate: (params) => {
+      const fast = params.get("fast_window");
+      const slow = params.get("slow_window");
+      if (typeof fast !== "number" || typeof slow !== "number") return true;
+      return fast < slow;
+    },
+    errorMessage: "快线周期必须小于慢线周期",
+    errorMessageEn: "Fast window must be less than slow window",
+    affectedParams: ["fast_window", "slow_window"],
+  },
+
+  // RSI buy/sell threshold validation
+  {
+    name: "rsi_threshold_order",
+    description: "RSI买入阈值必须小于卖出阈值",
+    descriptionEn: "RSI buy threshold must be less than sell threshold",
+    validate: (params) => {
+      const buy = params.get("rsi_buy");
+      const sell = params.get("rsi_sell");
+      if (typeof buy !== "number" || typeof sell !== "number") return true;
+      return buy < sell;
+    },
+    errorMessage: "RSI买入阈值必须小于卖出阈值",
+    errorMessageEn: "RSI buy threshold must be less than sell threshold",
+    affectedParams: ["rsi_buy", "rsi_sell"],
+  },
+
+  // MACD fast/slow validation
+  {
+    name: "macd_period_order",
+    description: "MACD快线周期必须小于慢线周期",
+    descriptionEn: "MACD fast period must be less than slow period",
+    validate: (params) => {
+      const fast = params.get("macd_fast");
+      const slow = params.get("macd_slow");
+      if (typeof fast !== "number" || typeof slow !== "number") return true;
+      return fast < slow;
+    },
+    errorMessage: "MACD快线周期必须小于慢线周期",
+    errorMessageEn: "MACD fast period must be less than slow period",
+    affectedParams: ["macd_fast", "macd_slow"],
+  },
+
+  // Stop loss / Take profit ratio validation
+  {
+    name: "stop_take_profit_ratio",
+    description: "止盈比例建议至少为止损比例的1.5倍",
+    descriptionEn: "Take profit should be at least 1.5x stop loss for positive risk-reward",
+    validate: (params) => {
+      const stopLoss = params.get("stop_loss");
+      const takeProfit = params.get("take_profit");
+      if (typeof stopLoss !== "number" || typeof takeProfit !== "number") return true;
+      // Warning if risk-reward ratio is less than 1.5
+      return takeProfit >= stopLoss * 1.5;
+    },
+    errorMessage: "止盈比例建议至少为止损比例的1.5倍（当前风险收益比不佳）",
+    errorMessageEn: "Take profit should be at least 1.5x stop loss (poor risk-reward ratio)",
+    affectedParams: ["stop_loss", "take_profit"],
+  },
+
+  // Position sizing validation
+  {
+    name: "position_limit",
+    description: "单次交易数量不应超过最大持仓限制",
+    descriptionEn: "Trade size should not exceed max position limit",
+    validate: (params) => {
+      const tradeSize = params.get("fixed_size") ?? params.get("trade_size");
+      const maxPosition = params.get("max_position");
+      if (typeof tradeSize !== "number" || typeof maxPosition !== "number") return true;
+      return tradeSize <= maxPosition;
+    },
+    errorMessage: "单次交易数量不应超过最大持仓限制",
+    errorMessageEn: "Trade size should not exceed max position limit",
+    affectedParams: ["fixed_size", "trade_size", "max_position"],
+  },
+
+  // ATR multiplier validation
+  {
+    name: "atr_multiplier_range",
+    description: "ATR倍数过大可能导致止损过宽",
+    descriptionEn: "ATR multiplier too high may result in wide stop loss",
+    validate: (params) => {
+      const multiplier = params.get("atr_multiplier");
+      if (typeof multiplier !== "number") return true;
+      return multiplier <= 3.0;
+    },
+    errorMessage: "ATR倍数超过3.0可能导致止损过宽，建议1.5-2.5",
+    errorMessageEn: "ATR multiplier > 3.0 may result in wide stops, recommend 1.5-2.5",
+    affectedParams: ["atr_multiplier"],
+  },
+];
+
+/**
+ * Cross-parameter validation result
+ * 跨参数验证结果
+ */
+export interface CrossParameterValidationResult {
+  isValid: boolean;
+  warnings: Array<{
+    rule: string;
+    message: string;
+    messageEn: string;
+    affectedParams: string[];
+    severity: "error" | "warning";
+  }>;
+}
+
+/**
+ * Validate cross-parameter rules
+ * 验证跨参数规则
+ *
+ * @param parameters - Array of strategy parameters
+ * @returns Validation result with any warnings
+ */
+export function validateCrossParameterRules(
+  parameters: StrategyParameter[],
+): CrossParameterValidationResult {
+  const warnings: CrossParameterValidationResult["warnings"] = [];
+
+  // Build parameter map for easy lookup
+  const paramMap = new Map<string, number | boolean | string | number[]>();
+  for (const param of parameters) {
+    paramMap.set(param.name, param.value);
+  }
+
+  // Check each rule
+  for (const rule of CROSS_PARAMETER_RULES) {
+    // Skip if none of the affected params are present
+    const hasAffectedParams = rule.affectedParams.some((p) => paramMap.has(p));
+    if (!hasAffectedParams) continue;
+
+    // Validate rule
+    const isValid = rule.validate(paramMap);
+    if (!isValid) {
+      // Determine severity based on rule name
+      const severity = rule.name.includes("ratio") || rule.name.includes("range")
+        ? "warning"
+        : "error";
+
+      warnings.push({
+        rule: rule.name,
+        message: rule.errorMessage,
+        messageEn: rule.errorMessageEn,
+        affectedParams: rule.affectedParams.filter((p) => paramMap.has(p)),
+        severity,
+      });
+    }
+  }
+
+  return {
+    isValid: warnings.every((w) => w.severity === "warning"),
+    warnings,
+  };
+}
+
+/**
+ * Get cross-parameter rules that apply to given parameters
+ * 获取适用于给定参数的跨参数规则
+ */
+export function getApplicableCrossRules(
+  parameterNames: string[],
+): CrossParameterRule[] {
+  return CROSS_PARAMETER_RULES.filter((rule) =>
+    rule.affectedParams.some((p) => parameterNames.includes(p))
+  );
 }
 
 // =============================================================================

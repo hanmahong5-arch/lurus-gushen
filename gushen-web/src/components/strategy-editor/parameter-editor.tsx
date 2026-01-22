@@ -16,11 +16,13 @@ import {
   parseStrategyParameters,
   updateStrategyCode,
   validateAllParameters,
+  validateCrossParameterRules,
   groupParametersByCategory,
   getCategoryDisplayName,
   type StrategyParameter,
   type ParameterCategory,
   type ParsedStrategyResult,
+  type CrossParameterValidationResult,
 } from "@/lib/strategy/parameter-parser";
 import { ParameterInfoDialog } from "./parameter-info-dialog";
 import { hasEnhancedInfo } from "@/lib/strategy/enhanced-parameter-info";
@@ -86,6 +88,9 @@ export function ParameterEditor({
   // Validation errors
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  // Cross-parameter validation result
+  const [crossValidation, setCrossValidation] = useState<CrossParameterValidationResult | null>(null);
+
   // Expanded categories
   const [expandedCategories, setExpandedCategories] = useState<
     Set<ParameterCategory>
@@ -127,11 +132,30 @@ export function ParameterEditor({
 
   // Apply changes to code
   const handleApplyChanges = useCallback(() => {
-    // Validate all parameters
+    // Validate all parameters (individual range validation)
     const validation = validateAllParameters(parameters);
     if (!validation.isValid) {
       setErrors(validation.errors);
-      return;
+      return false;
+    }
+
+    // Validate cross-parameter rules
+    const crossValidationResult = validateCrossParameterRules(parameters);
+    setCrossValidation(crossValidationResult);
+
+    // Block if there are errors (not warnings)
+    if (!crossValidationResult.isValid) {
+      // Add error messages to errors state for affected params
+      const crossErrors: Record<string, string> = {};
+      for (const warning of crossValidationResult.warnings) {
+        if (warning.severity === "error") {
+          for (const param of warning.affectedParams) {
+            crossErrors[param] = warning.message;
+          }
+        }
+      }
+      setErrors(crossErrors);
+      return false;
     }
 
     // Generate updated code
@@ -140,13 +164,26 @@ export function ParameterEditor({
 
     // Clear modification tracking
     setModifiedParams(new Set());
+    return true;
   }, [code, parameters, onCodeUpdate]);
+
+  // Apply changes and trigger backtest
+  const handleApplyAndBacktest = useCallback(() => {
+    const success = handleApplyChanges();
+    if (success && onRerunBacktest) {
+      // Small delay to ensure state is updated
+      setTimeout(() => {
+        onRerunBacktest();
+      }, 100);
+    }
+  }, [handleApplyChanges, onRerunBacktest]);
 
   // Reset parameters to original values
   const handleReset = useCallback(() => {
     setParameters(parsedResult.parameters);
     setModifiedParams(new Set());
     setErrors({});
+    setCrossValidation(null);
   }, [parsedResult.parameters]);
 
   // Toggle category expansion
@@ -216,6 +253,31 @@ export function ParameterEditor({
               >
                 应用修改
               </button>
+              {/* Apply and backtest button - shown when backtest callback is available */}
+              {onRerunBacktest && (
+                <button
+                  onClick={handleApplyAndBacktest}
+                  disabled={isBacktesting}
+                  className={cn(
+                    "px-3 py-1 text-xs rounded transition flex items-center gap-1",
+                    isBacktesting
+                      ? "bg-white/10 text-white/40 cursor-not-allowed"
+                      : "bg-profit hover:bg-profit/80 text-primary"
+                  )}
+                >
+                  {isBacktesting ? (
+                    <>
+                      <span className="w-2 h-2 border border-white/30 border-t-white rounded-full animate-spin" />
+                      回测中
+                    </>
+                  ) : (
+                    <>
+                      <span>⚡</span>
+                      应用并回测
+                    </>
+                  )}
+                </button>
+              )}
             </>
           )}
         </div>
@@ -317,19 +379,58 @@ export function ParameterEditor({
         )}
       </div>
 
+      {/* Cross-parameter validation warnings */}
+      {crossValidation && crossValidation.warnings.length > 0 && (
+        <div className="px-4 py-3 border-t border-border bg-loss/5">
+          <div className="space-y-2">
+            {crossValidation.warnings.map((warning, index) => (
+              <div
+                key={index}
+                className={cn(
+                  "flex items-start gap-2 p-2 rounded text-xs",
+                  warning.severity === "error"
+                    ? "bg-loss/10 border border-loss/30"
+                    : "bg-yellow-500/10 border border-yellow-500/30"
+                )}
+              >
+                <span className="text-base leading-none mt-0.5">
+                  {warning.severity === "error" ? "❌" : "⚠️"}
+                </span>
+                <div className="flex-1">
+                  <div className={cn(
+                    "font-medium",
+                    warning.severity === "error" ? "text-loss" : "text-yellow-400"
+                  )}>
+                    {warning.message}
+                  </div>
+                  <div className="text-white/40 text-[10px] mt-0.5">
+                    {warning.messageEn}
+                  </div>
+                  <div className="text-white/30 text-[10px] mt-1">
+                    相关参数: {warning.affectedParams.join(", ")}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Actions */}
       <div className="px-4 py-3 border-t border-border bg-primary/30">
         <div className="flex items-center justify-between">
           <p className="text-xs text-white/40">
-            修改参数后点击"应用修改"更新代码
+            {hasModifications
+              ? "点击「应用并回测」一键完成参数更新和回测"
+              : "修改参数后点击「应用修改」更新代码"}
           </p>
-          {onRerunBacktest && (
+          {onRerunBacktest && !hasModifications && (
             <button
               onClick={onRerunBacktest}
-              disabled={isBacktesting || hasModifications}
+              disabled={isBacktesting}
               className={cn(
                 "px-4 py-1.5 text-xs rounded transition flex items-center gap-1.5",
-                isBacktesting || hasModifications
+                isBacktesting
                   ? "bg-white/10 text-white/40 cursor-not-allowed"
                   : "bg-accent/20 hover:bg-accent/30 text-accent",
               )}

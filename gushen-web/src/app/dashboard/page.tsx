@@ -10,6 +10,8 @@ import { ParameterEditor } from "@/components/strategy-editor/parameter-editor";
 import { AutoSaveIndicator } from "@/components/strategy-editor/auto-save-indicator";
 import { DraftHistoryPanel } from "@/components/strategy-editor/draft-history-panel";
 import { StrategyGuideCard } from "@/components/strategy-editor/strategy-guide-card";
+import { AIStrategyAssistant } from "@/components/strategy-editor/ai-strategy-assistant";
+import { parseStrategyParameters, updateParameterInCode } from "@/lib/strategy/parameter-parser";
 import {
   useStrategyWorkspaceStore,
   selectWorkspace,
@@ -54,6 +56,17 @@ export default function DashboardPage() {
     return "backtest"; // Has backtest result, analyzing results
     // "validation" step is on strategy-validation page
   }, [generatedCode, workspace.lastBacktestResult]);
+
+  // Parse current parameters from generated code for AI assistant
+  // 从生成的代码中解析当前参数供AI助手使用
+  const currentParameters = useMemo(() => {
+    if (!generatedCode) return [];
+    const parseResult = parseStrategyParameters(generatedCode);
+    return parseResult.parameters.map((p) => ({
+      name: p.name,
+      value: p.value,
+    }));
+  }, [generatedCode]);
 
   // Ref to StrategyInput for focusing after template selection
   // 用于模板选择后聚焦到输入框
@@ -217,6 +230,48 @@ export default function DashboardPage() {
     setBacktesting(false);
   }, [setBacktesting]);
 
+  // Handle AI assistant single parameter application
+  // 处理AI助手单个参数应用
+  const handleApplyAIParameter = useCallback(
+    (name: string, value: number | string | boolean) => {
+      if (!generatedCode) return;
+      const updatedCode = updateParameterInCode(generatedCode, name, value);
+      if (updatedCode !== generatedCode) {
+        updateGeneratedCode(updatedCode);
+        markAsUnsaved();
+      }
+    },
+    [generatedCode, updateGeneratedCode, markAsUnsaved]
+  );
+
+  // Handle AI assistant all suggestions application
+  // 处理AI助手批量应用所有建议
+  const handleApplyAllAISuggestions = useCallback(
+    (suggestions: Array<{ name: string; value: number | string | boolean }>) => {
+      if (!generatedCode || suggestions.length === 0) return;
+
+      let updatedCode = generatedCode;
+      for (const suggestion of suggestions) {
+        updatedCode = updateParameterInCode(
+          updatedCode,
+          suggestion.name,
+          suggestion.value
+        );
+      }
+
+      if (updatedCode !== generatedCode) {
+        updateGeneratedCode(updatedCode);
+        markAsUnsaved();
+        // Trigger backtest after applying all suggestions
+        // 应用所有建议后触发回测
+        setTimeout(() => {
+          handleRerunBacktest();
+        }, 100);
+      }
+    },
+    [generatedCode, updateGeneratedCode, markAsUnsaved, handleRerunBacktest]
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -343,13 +398,24 @@ export default function DashboardPage() {
             <CodePreview code={generatedCode} isLoading={isGenerating} />
           </div>
 
-          {/* Right column - Backtest */}
-          <div>
+          {/* Right column - Backtest + AI Assistant */}
+          <div className="space-y-6">
             <BacktestPanel
               strategyCode={generatedCode}
               onBacktestStart={handleBacktestStart}
               onBacktestEnd={handleBacktestEnd}
             />
+
+            {/* AI Strategy Assistant - shows when code is generated */}
+            {generatedCode && (
+              <AIStrategyAssistant
+                strategyCode={generatedCode}
+                backtestResult={workspace.lastBacktestResult ?? undefined}
+                currentParameters={currentParameters}
+                onApplyParameter={handleApplyAIParameter}
+                onApplyAllSuggestions={handleApplyAllAISuggestions}
+              />
+            )}
           </div>
         </div>
 

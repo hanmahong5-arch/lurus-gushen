@@ -293,7 +293,9 @@ describe('BacktestBasisPanel', () => {
 
       render(<BacktestBasisPanel result={result} />);
 
-      expect(screen.getByText(/0\.00%/)).toBeInTheDocument();
+      // Multiple elements may show 0.00%, so use getAllByText
+      const zeroPercentElements = screen.getAllByText(/0\.00%/);
+      expect(zeroPercentElements.length).toBeGreaterThan(0);
     });
   });
 
@@ -338,8 +340,9 @@ describe('BacktestBasisPanel', () => {
 
       render(<BacktestBasisPanel result={result} />);
 
-      // Should show formatted date
-      expect(screen.getByText(/2024/)).toBeInTheDocument();
+      // Multiple date elements may contain 2024, so use getAllByText
+      const dateElements = screen.getAllByText(/2024/);
+      expect(dateElements.length).toBeGreaterThan(0);
     });
 
     it('handles null generatedAt', () => {
@@ -582,7 +585,9 @@ describe('BacktestBasisPanel', () => {
 
       render(<BacktestBasisPanel result={result} />);
 
-      expect(screen.getByText('(按比例)')).toBeInTheDocument();
+      // Multiple commission type indicators may exist
+      const indicators = screen.getAllByText('(按比例)');
+      expect(indicators.length).toBeGreaterThan(0);
     });
 
     it('shows fixed commission type', () => {

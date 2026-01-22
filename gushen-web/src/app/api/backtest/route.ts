@@ -28,8 +28,28 @@ import {
 } from "@/lib/backtest/engine";
 import { getKLineData } from "@/lib/data-service";
 
+// Data source tracking interface
+interface DataSourceInfo {
+  type: "real" | "simulated" | "mixed";
+  provider: string;
+  reason: string;
+  fallbackUsed: boolean;
+  realDataCount: number;
+  simulatedDataCount: number;
+}
+
 export async function POST(request: NextRequest) {
   const startTime = Date.now();
+
+  // Track data source information
+  let dataSourceInfo: DataSourceInfo = {
+    type: "simulated",
+    provider: "mock-generator",
+    reason: "Default fallback",
+    fallbackUsed: false,
+    realDataCount: 0,
+    simulatedDataCount: 0,
+  };
 
   try {
     const body = await request.json();
@@ -85,6 +105,7 @@ export async function POST(request: NextRequest) {
 
     // Get K-line data
     let klines: BacktestKline[] = [];
+    let realDataFetchError: string | null = null;
 
     // Try to fetch real data if symbol is provided
     if (config.symbol && config.symbol !== "mock") {
@@ -105,15 +126,42 @@ export async function POST(request: NextRequest) {
             close: k.close,
             volume: k.volume,
           }));
+
+          // Update data source info for real data
+          dataSourceInfo = {
+            type: "real",
+            provider: klineResult.source || "eastmoney",
+            reason: "Successfully fetched real market data",
+            fallbackUsed: false,
+            realDataCount: klines.length,
+            simulatedDataCount: 0,
+          };
+        } else {
+          realDataFetchError = klineResult.error || "No data returned from API";
         }
       } catch (err) {
-        console.warn("Failed to fetch real K-line data, using mock data:", err);
+        realDataFetchError = err instanceof Error ? err.message : "Unknown fetch error";
+        console.warn("Failed to fetch real K-line data:", realDataFetchError);
       }
+    } else {
+      realDataFetchError = config.symbol === "mock"
+        ? "Mock mode requested by user"
+        : "No symbol provided";
     }
 
     // If no real data, generate mock data
     if (klines.length === 0) {
       klines = generateBacktestData(days, 50 + Math.random() * 100, 0.02);
+
+      // Update data source info for simulated data
+      dataSourceInfo = {
+        type: "simulated",
+        provider: "mock-generator",
+        reason: realDataFetchError || "Fallback to simulated data",
+        fallbackUsed: config.symbol !== "mock" && config.symbol !== undefined,
+        realDataCount: 0,
+        simulatedDataCount: klines.length,
+      };
     }
 
     // Filter klines by date range
@@ -148,7 +196,17 @@ export async function POST(request: NextRequest) {
       meta: {
         barsProcessed: filteredKlines.length,
         executionTime: totalTime,
-        dataSource: klines.length > 0 && config.symbol !== "mock" ? "real" : "simulated",
+        // Enhanced data source information
+        dataSource: {
+          type: dataSourceInfo.type,
+          provider: dataSourceInfo.provider,
+          reason: dataSourceInfo.reason,
+          fallbackUsed: dataSourceInfo.fallbackUsed,
+          realDataCount: dataSourceInfo.realDataCount,
+          simulatedDataCount: dataSourceInfo.simulatedDataCount,
+        },
+        // Legacy field for backward compatibility
+        dataSourceLegacy: dataSourceInfo.type === "real" ? "real" : "simulated",
       },
       timestamp: Date.now(),
     });

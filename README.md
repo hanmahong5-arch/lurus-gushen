@@ -13,6 +13,36 @@
 
 > **⚠️ 重要**: 前端项目统一使用 **bun** 作为包管理器和运行时，不使用 npm。详见根目录 CLAUDE.md。
 
+## 核心功能 Core Features
+
+### 策略编辑器 Strategy Editor
+- **AI 策略生成**: 自然语言描述生成 VeighNa 策略代码
+- **参数可视化编辑**: 实时编辑策略参数
+- **跨参数验证**: 自动验证参数逻辑关系 (如 fast_window < slow_window)
+- **一键应用并回测**: 参数修改后快速验证效果
+
+### 回测系统 Backtest System
+- **金融级精度**: 使用 Decimal.js 进行金融计算
+- **数据源透明**: 清晰显示数据来源 (实盘/模拟)
+- **30+ 指标**: 夏普比率、最大回撤、胜率等完整指标
+- **增强交易记录**: 显示成本明细、触发依据、持仓变化
+
+### AI 策略助手 AI Strategy Assistant (NEW)
+- **参数优化建议**: 基于回测结果的智能参数建议
+- **策略解读**: 自然语言解释策略逻辑
+- **敏感性分析**: 识别关键参数和稳定参数
+- **一键应用**: 快速应用 AI 建议的参数值
+
+### 投资顾问 Investment Advisor
+- **多空辩论**: 牛熊双方多轮论证
+- **11个专业Agent**: 分析师、研究员、投资大师
+- **7大投资流派**: 价值、成长、技术、量化等
+
+### 错误处理 Error Handling
+- **全局 Error Boundary**: 防止单一组件崩溃影响全局
+- **友好错误提示**: 中英双语错误信息
+- **自动恢复**: 支持重置和重试
+
 ## GitHub 仓库
 
 - **统一仓库**: https://github.com/hanmahong5-arch/lurus-gushen
@@ -49,6 +79,8 @@
 
 ### 前端 API (Next.js)
 - `POST /api/strategy/generate` - AI 策略生成 (调用 lurus-api → DeepSeek)
+- `POST /api/strategy/optimize` - AI 策略优化建议 (参数建议/策略解读/敏感性分析)
+- `POST /api/backtest` - 前端回测执行 (支持真实/模拟数据)
 - `POST /api/advisor/*` - 投资顾问对话
 - `POST /api/auth/*` - 用户认证
 

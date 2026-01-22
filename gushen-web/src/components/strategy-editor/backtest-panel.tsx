@@ -1,3 +1,15 @@
+/**
+ * Backtest Panel Component - Professional Fintech Terminal Style
+ * 回测面板组件 - 专业金融终端风格
+ *
+ * Features:
+ * - Glass morphism design with backdrop blur
+ * - Tabular numbers for all financial data
+ * - Profit/Loss color coding with pulse effects
+ * - Terminal-style header with status indicators
+ * - Professional metric cards with glow effects
+ */
+
 "use client";
 
 import { useState, useCallback } from "react";
@@ -220,53 +232,84 @@ export function BacktestPanel({
   };
 
   return (
-    <div className="bg-surface/80 backdrop-blur-xl border border-border rounded-xl overflow-hidden">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-primary/50 border-b border-border">
-        <div className="flex items-center gap-2">
-          <span className="text-lg">📊</span>
-          <span className="text-sm font-medium text-white">
-            回测结果 / Backtest Results
-          </span>
+    <div className="glass-panel rounded-xl overflow-hidden flex flex-col h-full">
+      {/* Terminal-style Header / 终端风格头部 */}
+      <div className="terminal-header flex items-center justify-between shrink-0">
+        <div className="flex items-center gap-3">
+          {/* Traffic lights / 交通灯 */}
+          <div className="flex items-center gap-1.5">
+            <div className="dot dot-red" />
+            <div className="dot dot-yellow" />
+            <div className="dot dot-green" />
+          </div>
+          {/* Title / 标题 */}
+          <div className="flex items-center gap-2">
+            <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            <span className="text-sm font-medium text-neutral-200">
+              回测结果
+            </span>
+            <span className="text-xs text-neutral-500">Backtest Results</span>
+          </div>
+          {/* Status indicator / 状态指示器 */}
+          {running && (
+            <span className="flex items-center gap-1.5 px-2 py-0.5 bg-accent/20 rounded-full">
+              <span className="w-1.5 h-1.5 bg-accent rounded-full animate-pulse" />
+              <span className="text-[10px] text-accent font-mono">RUNNING</span>
+            </span>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowConfig(!showConfig)}
-            className="text-white/60 hover:text-white"
+            className={cn(
+              "text-neutral-400 hover:text-neutral-200 text-xs gap-1.5",
+              showConfig && "text-primary bg-primary/10"
+            )}
           >
-            ⚙️ 设置
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            设置
           </Button>
-          <Button
-            size="sm"
+          <button
             onClick={handleRunBacktest}
             disabled={running || !strategyCode}
-            className="gap-1"
+            className={cn(
+              "btn-primary px-4 py-1.5 text-sm font-medium rounded-lg flex items-center gap-2",
+              "disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-primary"
+            )}
           >
             {running ? (
               <>
-                <span className="w-3 h-3 border-2 border-primary-600/30 border-t-primary-600 rounded-full animate-spin" />
-                回测中...
+                <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <span className="font-mono">运行中...</span>
               </>
             ) : (
               <>
-                <span>▶</span>
+                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                  <path d="M6.3 2.841A1.5 1.5 0 004 4.11V15.89a1.5 1.5 0 002.3 1.269l9.344-5.89a1.5 1.5 0 000-2.538L6.3 2.84z" />
+                </svg>
                 运行回测
               </>
             )}
-          </Button>
+          </button>
         </div>
       </div>
 
-      {/* Config Panel */}
+      {/* Config Panel / 配置面板 */}
       {showConfig && (
-        <div className="p-4 bg-primary/30 border-b border-border space-y-4">
+        <div className="p-4 bg-void/50 border-b border-white/5 space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            {/* Timeframe */}
+            {/* Timeframe / 时间颗粒度 */}
             <div>
-              <label className="block text-xs text-white/50 mb-1">
-                时间颗粒度 / Timeframe
+              <label className="block text-xs text-neutral-400 mb-1.5 font-medium">
+                时间颗粒度
+                <span className="text-neutral-600 ml-1">Timeframe</span>
               </label>
               <select
                 value={config.timeframe}
@@ -276,13 +319,13 @@ export function BacktestPanel({
                     timeframe: e.target.value as BacktestConfig["timeframe"],
                   }))
                 }
-                className="w-full px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-accent/50"
+                className="w-full px-3 py-2 bg-surface border border-white/10 rounded-lg text-neutral-200 text-sm focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors"
               >
                 {TIMEFRAME_OPTIONS.map((opt) => (
                   <option
                     key={opt.value}
                     value={opt.value}
-                    className="bg-surface"
+                    className="bg-surface-dark"
                   >
                     {opt.label} ({opt.labelEn})
                   </option>
@@ -290,49 +333,54 @@ export function BacktestPanel({
               </select>
             </div>
 
-            {/* Initial Capital */}
+            {/* Initial Capital / 初始资金 */}
             <div>
-              <label className="block text-xs text-white/50 mb-1">
-                初始资金 / Capital
+              <label className="block text-xs text-neutral-400 mb-1.5 font-medium">
+                初始资金
+                <span className="text-neutral-600 ml-1">Capital</span>
               </label>
-              <input
-                type="number"
-                value={config.initialCapital}
-                onChange={(e) =>
-                  setConfig((prev) => ({
-                    ...prev,
-                    initialCapital: parseInt(e.target.value) || 100000,
-                  }))
-                }
-                className="w-full px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-accent/50"
-              />
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 text-sm">¥</span>
+                <input
+                  type="number"
+                  value={config.initialCapital}
+                  onChange={(e) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      initialCapital: parseInt(e.target.value) || 100000,
+                    }))
+                  }
+                  className="w-full pl-7 pr-3 py-2 bg-surface border border-white/10 rounded-lg text-neutral-200 text-sm font-mono tabular-nums focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors"
+                />
+              </div>
             </div>
           </div>
 
-          {/* Date Range */}
+          {/* Date Range / 回测区间 */}
           <div>
-            <label className="block text-xs text-white/50 mb-2">
-              回测区间 / Date Range
+            <label className="block text-xs text-neutral-400 mb-2 font-medium">
+              回测区间
+              <span className="text-neutral-600 ml-1">Date Range</span>
             </label>
-            <div className="flex flex-wrap gap-2 mb-2">
+            <div className="flex flex-wrap gap-1.5 mb-3">
               {PRESET_PERIODS.map((period) => (
                 <button
                   key={period.days}
                   onClick={() => setPresetPeriod(period.days)}
-                  className="px-2 py-1 text-xs rounded bg-white/5 text-white/70 hover:bg-white/10 hover:text-white transition"
+                  className="px-2.5 py-1 text-xs rounded-md bg-surface hover:bg-surface-hover text-neutral-400 hover:text-neutral-200 border border-white/5 hover:border-white/10 transition-all btn-tactile"
                 >
                   {period.label}
                 </button>
               ))}
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-3">
               <input
                 type="date"
                 value={config.startDate}
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, startDate: e.target.value }))
                 }
-                className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-accent/50"
+                className="px-3 py-2 bg-surface border border-white/10 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors"
               />
               <input
                 type="date"
@@ -340,19 +388,22 @@ export function BacktestPanel({
                 onChange={(e) =>
                   setConfig((prev) => ({ ...prev, endDate: e.target.value }))
                 }
-                className="px-3 py-1.5 bg-white/5 border border-white/10 rounded-lg text-white text-sm focus:outline-none focus:border-accent/50"
+                className="px-3 py-2 bg-surface border border-white/10 rounded-lg text-neutral-200 text-sm font-mono focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 transition-colors"
               />
             </div>
           </div>
 
-          {/* Advanced Settings */}
-          <details className="text-xs">
-            <summary className="text-white/50 cursor-pointer hover:text-white">
+          {/* Advanced Settings / 高级设置 */}
+          <details className="text-xs group">
+            <summary className="text-neutral-500 cursor-pointer hover:text-neutral-300 flex items-center gap-1.5 transition-colors">
+              <svg className="w-3 h-3 transition-transform group-open:rotate-90" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
               高级设置 / Advanced
             </summary>
-            <div className="grid grid-cols-2 gap-2 mt-2">
+            <div className="grid grid-cols-2 gap-3 mt-3 pt-3 border-t border-white/5">
               <div>
-                <label className="block text-white/40 mb-1">手续费率</label>
+                <label className="block text-neutral-500 mb-1.5">手续费率</label>
                 <input
                   type="number"
                   step="0.0001"
@@ -363,11 +414,11 @@ export function BacktestPanel({
                       commission: parseFloat(e.target.value) || 0.0003,
                     }))
                   }
-                  className="w-full px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs"
+                  className="w-full px-3 py-1.5 bg-surface border border-white/10 rounded-lg text-neutral-200 text-xs font-mono tabular-nums focus:outline-none focus:border-primary/50 transition-colors"
                 />
               </div>
               <div>
-                <label className="block text-white/40 mb-1">滑点率</label>
+                <label className="block text-neutral-500 mb-1.5">滑点率</label>
                 <input
                   type="number"
                   step="0.0001"
@@ -378,7 +429,7 @@ export function BacktestPanel({
                       slippage: parseFloat(e.target.value) || 0.001,
                     }))
                   }
-                  className="w-full px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-xs"
+                  className="w-full px-3 py-1.5 bg-surface border border-white/10 rounded-lg text-neutral-200 text-xs font-mono tabular-nums focus:outline-none focus:border-primary/50 transition-colors"
                 />
               </div>
             </div>
@@ -386,42 +437,77 @@ export function BacktestPanel({
         </div>
       )}
 
-      {/* Error Message */}
+      {/* Error Message / 错误消息 */}
       {error && (
-        <div className="px-4 py-2 bg-loss/10 border-b border-loss/30">
-          <p className="text-sm text-loss">⚠️ {error}</p>
+        <div className="px-4 py-3 bg-loss/10 border-b border-loss/30 flex items-center gap-2">
+          <svg className="w-4 h-4 text-loss shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+          </svg>
+          <p className="text-sm text-loss">{error}</p>
         </div>
       )}
 
-      {/* Results */}
-      <div className="p-4">
+      {/* Results / 结果区域 */}
+      <div className="flex-1 min-h-0 overflow-auto p-4">
         {running ? (
-          <div className="py-8 flex flex-col items-center justify-center">
-            <div className="w-12 h-12 border-3 border-accent/30 border-t-accent rounded-full animate-spin mb-4" />
-            <span className="text-white/50">正在运行回测...</span>
-            <span className="text-xs text-white/30 mt-1">
+          <div className="py-12 flex flex-col items-center justify-center">
+            {/* Loading animation / 加载动画 */}
+            <div className="relative w-16 h-16 mb-6">
+              {/* Outer ring */}
+              <div className="absolute inset-0 border-2 border-primary/20 rounded-full" />
+              {/* Spinning ring */}
+              <div className="absolute inset-0 border-2 border-transparent border-t-primary rounded-full animate-spin" />
+              {/* Inner pulse */}
+              <div className="absolute inset-3 bg-primary/10 rounded-full animate-pulse" />
+              {/* Center dot */}
+              <div className="absolute inset-[26px] bg-primary rounded-full" />
+            </div>
+            <span className="text-neutral-300 font-medium mb-1">正在运行回测...</span>
+            <span className="text-xs text-neutral-500 font-mono tabular-nums">
               处理 {config.startDate} 至 {config.endDate} 的数据
             </span>
+            {/* Progress bar */}
+            <div className="w-48 h-1 mt-4 bg-surface-hover rounded-full overflow-hidden">
+              <div
+                className="h-full bg-gradient-to-r from-primary/50 via-primary to-primary/50 animate-data-stream"
+                style={{ width: "200%", marginLeft: "-100%" }}
+              />
+            </div>
           </div>
         ) : displayResult ? (
           <>
-            {/* Strategy Info */}
+            {/* Strategy Info / 策略信息 */}
             {displayResult.strategy && (
-              <div className="mb-4 p-3 bg-accent/5 rounded-lg border border-accent/20">
+              <div className="mb-4 p-3 bg-primary/5 rounded-lg border border-primary/20">
                 <div className="flex items-center justify-between">
-                  <div>
-                    <span className="text-sm font-medium text-accent">
-                      {displayResult.strategy.name}
-                    </span>
-                    <span className="text-xs text-white/40 ml-2">
-                      {displayResult.strategy.indicators.join(" + ")}
-                    </span>
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center">
+                      <svg className="w-4 h-4 text-primary" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <span className="text-sm font-medium text-primary">
+                        {displayResult.strategy.name}
+                      </span>
+                      <div className="flex items-center gap-1.5 mt-0.5">
+                        {displayResult.strategy.indicators.map((ind, i) => (
+                          <span key={i} className="px-1.5 py-0.5 text-[10px] bg-surface rounded font-mono text-neutral-400">
+                            {ind}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs text-white/40">
+                  <div className="text-xs text-neutral-500 font-mono tabular-nums text-right">
                     {Object.entries(displayResult.strategy.params)
                       .slice(0, 3)
-                      .map(([k, v]) => `${k}=${v}`)
-                      .join(", ")}
+                      .map(([k, v]) => (
+                        <div key={k}>
+                          <span className="text-neutral-600">{k}=</span>
+                          <span className="text-neutral-400">{v}</span>
+                        </div>
+                      ))}
                   </div>
                 </div>
               </div>
@@ -430,133 +516,98 @@ export function BacktestPanel({
             {/* Backtest Basis Panel - Show data source and configuration transparency */}
             <BacktestBasisPanel result={displayResult} className="mb-4" />
 
-            {/* Main Metrics Grid */}
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            {/* Main Metrics Grid / 核心指标网格 */}
+            <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
               <MetricCard
                 label="总收益率"
                 labelEn="Total Return"
                 value={`${displayResult.totalReturn >= 0 ? "+" : ""}${displayResult.totalReturn.toFixed(2)}%`}
-                valueColor={
-                  displayResult.totalReturn >= 0 ? "text-profit" : "text-loss"
-                }
+                isProfit={displayResult.totalReturn >= 0}
                 highlight
+                size="large"
               />
               <MetricCard
                 label="年化收益"
                 labelEn="Annualized"
                 value={`${displayResult.annualizedReturn >= 0 ? "+" : ""}${displayResult.annualizedReturn.toFixed(1)}%`}
-                valueColor={
-                  displayResult.annualizedReturn >= 0
-                    ? "text-profit"
-                    : "text-loss"
-                }
+                isProfit={displayResult.annualizedReturn >= 0}
               />
               <MetricCard
                 label="最大回撤"
                 labelEn="Max Drawdown"
                 value={`-${Math.abs(displayResult.maxDrawdown).toFixed(1)}%`}
-                valueColor="text-loss"
+                isProfit={false}
+                icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
+                  </svg>
+                }
               />
               <MetricCard
                 label="夏普比率"
                 labelEn="Sharpe Ratio"
                 value={displayResult.sharpeRatio.toFixed(2)}
-                valueColor={
-                  displayResult.sharpeRatio >= 1 ? "text-profit" : "text-white"
-                }
+                isProfit={displayResult.sharpeRatio >= 1}
+                neutral={displayResult.sharpeRatio < 1 && displayResult.sharpeRatio > 0}
               />
               <MetricCard
                 label="胜率"
                 labelEn="Win Rate"
                 value={`${displayResult.winRate.toFixed(1)}%`}
-                valueColor={
-                  displayResult.winRate >= 50 ? "text-profit" : "text-loss"
-                }
+                isProfit={displayResult.winRate >= 50}
               />
               <MetricCard
                 label="交易次数"
                 labelEn="Total Trades"
                 value={displayResult.totalTrades.toString()}
-                valueColor="text-white"
+                neutral
+                icon={
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                  </svg>
+                }
               />
             </div>
 
-            {/* Detailed Stats */}
+            {/* Detailed Stats / 详细统计 */}
             {showDetails && (
-              <div className="mt-4 p-4 bg-primary/30 rounded-lg border border-border">
-                <h4 className="text-sm font-medium text-white mb-3">
-                  详细统计 / Detailed Stats
+              <div className="mt-4 p-4 bg-surface/50 rounded-lg border border-white/5">
+                <h4 className="text-sm font-medium text-neutral-200 mb-4 flex items-center gap-2">
+                  <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
+                  详细统计
+                  <span className="text-neutral-600 text-xs font-normal">Detailed Stats</span>
                 </h4>
-                <div className="grid grid-cols-2 gap-x-8 gap-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-white/50">盈利因子</span>
-                    <span className="text-white">
-                      {(displayResult.profitFactor ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">索提诺比率</span>
-                    <span className="text-white">
-                      {(displayResult.sortinoRatio ?? 0).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">平均盈利</span>
-                    <span className="text-profit">
-                      +{(displayResult.avgWin ?? 0).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">平均亏损</span>
-                    <span className="text-loss">
-                      -{(displayResult.avgLoss ?? 0).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">最大连胜</span>
-                    <span className="text-profit">
-                      {displayResult.maxConsecutiveWins ?? 0}次
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">最大连亏</span>
-                    <span className="text-loss">
-                      {displayResult.maxConsecutiveLosses ?? 0}次
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">最大单笔盈利</span>
-                    <span className="text-profit">
-                      +{(displayResult.maxSingleWin ?? 0).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">最大单笔亏损</span>
-                    <span className="text-loss">
-                      {(displayResult.maxSingleLoss ?? 0).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-white/50">平均持仓时间</span>
-                    <span className="text-white">
-                      {(displayResult.avgHoldingPeriod ?? 0).toFixed(1)}天
-                    </span>
-                  </div>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm">
+                  <StatRow label="盈利因子" value={(displayResult.profitFactor ?? 0).toFixed(2)} neutral />
+                  <StatRow label="索提诺比率" value={(displayResult.sortinoRatio ?? 0).toFixed(2)} neutral />
+                  <StatRow label="平均盈利" value={`+${(displayResult.avgWin ?? 0).toFixed(2)}%`} profit />
+                  <StatRow label="平均亏损" value={`-${(displayResult.avgLoss ?? 0).toFixed(2)}%`} loss />
+                  <StatRow label="最大连胜" value={`${displayResult.maxConsecutiveWins ?? 0}次`} profit />
+                  <StatRow label="最大连亏" value={`${displayResult.maxConsecutiveLosses ?? 0}次`} loss />
+                  <StatRow label="最大单笔盈利" value={`+${(displayResult.maxSingleWin ?? 0).toFixed(2)}%`} profit />
+                  <StatRow label="最大单笔亏损" value={`${(displayResult.maxSingleLoss ?? 0).toFixed(2)}%`} loss />
+                  <StatRow label="平均持仓时间" value={`${(displayResult.avgHoldingPeriod ?? 0).toFixed(1)}天`} neutral />
                 </div>
               </div>
             )}
 
-            {/* Trade List - Enhanced with detailed information (Phase 14 UX) */}
+            {/* Trade List - Enhanced with detailed information / 交易记录 */}
             {showTrades &&
               displayResult.trades &&
               displayResult.trades.length > 0 && (
-                <div className="mt-4 p-4 bg-primary/30 rounded-lg border border-border">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-medium text-white">
-                      交易记录 / Trade History
+                <div className="mt-4 p-4 bg-surface/50 rounded-lg border border-white/5">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="text-sm font-medium text-neutral-200 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-neutral-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />
+                      </svg>
+                      交易记录
+                      <span className="text-neutral-600 text-xs font-normal">Trade History</span>
                     </h4>
-                    <span className="text-xs text-white/40">
-                      共 {displayResult.trades.length} 笔交易（最近20笔）
+                    <span className="px-2 py-0.5 text-[10px] bg-surface rounded-full text-neutral-500 font-mono">
+                      共 {displayResult.trades.length} 笔（最近20笔）
                     </span>
                   </div>
                   <div className="max-h-[600px] overflow-y-auto space-y-3">
@@ -682,39 +733,64 @@ export function BacktestPanel({
                 </div>
               )}
 
-            {/* Action Buttons */}
-            <div className="flex gap-2 mt-4 pt-4 border-t border-border">
-              <Button
-                variant="secondary"
-                size="sm"
-                className="flex-1"
+            {/* Action Buttons / 操作按钮 */}
+            <div className="flex gap-2 mt-4 pt-4 border-t border-white/5">
+              <button
                 onClick={() => setShowDetails(!showDetails)}
+                className={cn(
+                  "flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-all btn-tactile",
+                  "bg-surface hover:bg-surface-hover border border-white/5 hover:border-white/10",
+                  showDetails ? "text-primary" : "text-neutral-400 hover:text-neutral-200"
+                )}
               >
-                {showDetails ? "收起" : "详情"}
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="flex-1"
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg className={cn("w-4 h-4 transition-transform", showDetails && "rotate-180")} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                  </svg>
+                  {showDetails ? "收起详情" : "查看详情"}
+                </span>
+              </button>
+              <button
                 onClick={() => setShowTrades(!showTrades)}
+                className={cn(
+                  "flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-all btn-tactile",
+                  "bg-surface hover:bg-surface-hover border border-white/5 hover:border-white/10",
+                  showTrades ? "text-primary" : "text-neutral-400 hover:text-neutral-200"
+                )}
               >
-                {showTrades ? "隐藏" : "交易记录"}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="flex-1"
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 10h16M4 14h16M4 18h16" />
+                  </svg>
+                  {showTrades ? "隐藏记录" : "交易记录"}
+                </span>
+              </button>
+              <button
                 onClick={handleExport}
+                className="flex-1 px-3 py-2 text-sm rounded-lg font-medium transition-all btn-tactile bg-surface hover:bg-surface-hover border border-white/5 hover:border-white/10 text-neutral-400 hover:text-neutral-200"
               >
-                导出
-              </Button>
+                <span className="flex items-center justify-center gap-1.5">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  导出报告
+                </span>
+              </button>
             </div>
           </>
         ) : (
-          <div className="py-8 text-center text-white/40">
-            <p>点击"运行回测"开始测试策略</p>
-            <p className="text-xs mt-1">
-              Click "Run Backtest" to test your strategy
+          /* Empty State / 空状态 */
+          <div className="py-16 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 rounded-xl bg-surface-hover/50 flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <p className="text-neutral-400 text-sm mb-1">
+              点击「运行回测」开始测试策略
+            </p>
+            <p className="text-neutral-600 text-xs">
+              Click Run Backtest to test your strategy
             </p>
           </div>
         )}
@@ -731,29 +807,114 @@ interface MetricCardProps {
   label: string;
   labelEn: string;
   value: string;
-  valueColor?: string;
+  isProfit?: boolean;
+  neutral?: boolean;
   highlight?: boolean;
+  size?: "default" | "large";
+  icon?: React.ReactNode;
 }
 
+/**
+ * Metric Card Component - Professional fintech data display
+ * 指标卡片组件 - 专业金融数据展示
+ */
 function MetricCard({
   label,
   labelEn,
   value,
-  valueColor = "text-white",
+  isProfit = true,
+  neutral = false,
   highlight = false,
+  size = "default",
+  icon,
 }: MetricCardProps) {
+  // Determine value color based on profit/loss state
+  const valueColorClass = neutral
+    ? "text-neutral-200"
+    : isProfit
+    ? "text-profit"
+    : "text-loss";
+
+  // Determine glow effect based on state
+  const glowClass = !neutral && (
+    isProfit ? "glow-profit" : "glow-loss"
+  );
+
   return (
     <div
       className={cn(
-        "p-3 rounded-lg",
-        highlight ? "bg-accent/10 border border-accent/30" : "bg-primary/30",
+        "stat-card relative overflow-hidden group",
+        highlight && "ring-1 ring-primary/30 bg-primary/5",
+        size === "large" && "col-span-1 lg:col-span-1"
       )}
     >
-      <div className="text-xs text-white/50 mb-1">
-        {label}
-        <span className="block text-white/30">{labelEn}</span>
+      {/* Background glow effect for highlighted cards */}
+      {highlight && (
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-transparent pointer-events-none" />
+      )}
+
+      {/* Label / 标签 */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="text-xs text-neutral-500">
+          {label}
+          <span className="block text-[10px] text-neutral-600">{labelEn}</span>
+        </div>
+        {icon && (
+          <div className={cn("text-neutral-600 group-hover:text-neutral-400 transition-colors", valueColorClass)}>
+            {icon}
+          </div>
+        )}
       </div>
-      <div className={cn("text-xl font-bold", valueColor)}>{value}</div>
+
+      {/* Value / 数值 */}
+      <div
+        className={cn(
+          "font-mono tabular-nums font-bold tracking-tight transition-all",
+          size === "large" ? "text-2xl" : "text-xl",
+          valueColorClass,
+          highlight && glowClass
+        )}
+      >
+        {value}
+      </div>
+
+      {/* Pulse indicator for profit/loss */}
+      {!neutral && (
+        <div className={cn(
+          "absolute top-3 right-3 w-1.5 h-1.5 rounded-full",
+          isProfit ? "bg-profit animate-pulse" : "bg-loss animate-pulse"
+        )} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * Stat Row Component - For detailed statistics display
+ * 统计行组件 - 用于详细统计展示
+ */
+interface StatRowProps {
+  label: string;
+  value: string;
+  profit?: boolean;
+  loss?: boolean;
+  neutral?: boolean;
+}
+
+function StatRow({ label, value, profit, loss, neutral }: StatRowProps) {
+  return (
+    <div className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+      <span className="text-neutral-500 text-xs">{label}</span>
+      <span
+        className={cn(
+          "font-mono tabular-nums text-sm font-medium",
+          profit && "text-profit",
+          loss && "text-loss",
+          neutral && "text-neutral-300"
+        )}
+      >
+        {value}
+      </span>
     </div>
   );
 }

@@ -42,8 +42,7 @@ class MockResizeObserver {
   }
 }
 
-// @ts-expect-error - Mock implementation
-globalThis.ResizeObserver = MockResizeObserver;
+globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 /**
  * Mock IntersectionObserver
@@ -85,8 +84,7 @@ class MockIntersectionObserver {
   }
 }
 
-// @ts-expect-error - Mock implementation
-globalThis.IntersectionObserver = MockIntersectionObserver;
+globalThis.IntersectionObserver = MockIntersectionObserver as unknown as typeof IntersectionObserver;
 
 /**
  * Mock matchMedia
@@ -164,36 +162,8 @@ console.warn = vi.fn((...args: unknown[]) => {
 // Custom Matchers Type Declarations
 // ============================================================
 
-declare module 'vitest' {
-  interface Assertion<T = unknown> {
-    // jest-dom matchers
-    toBeInTheDocument(): T;
-    toHaveTextContent(text: string | RegExp): T;
-    toHaveAttribute(attr: string, value?: string): T;
-    toHaveClass(...classNames: string[]): T;
-    toBeVisible(): T;
-    toBeDisabled(): T;
-    toBeEnabled(): T;
-    toHaveStyle(css: Record<string, unknown>): T;
-    toContainElement(element: HTMLElement | null): T;
-    toHaveValue(value: string | number | string[]): T;
-    toBeChecked(): T;
-    toHaveFocus(): T;
-    toBeEmpty(): T;
-    toBeEmptyDOMElement(): T;
-    toBeRequired(): T;
-    toBeValid(): T;
-    toBeInvalid(): T;
-    toHaveDescription(text?: string | RegExp): T;
-    toHaveDisplayValue(value: string | RegExp | Array<string | RegExp>): T;
-    toHaveAccessibleDescription(text?: string | RegExp): T;
-    toHaveAccessibleName(text?: string | RegExp): T;
-    toHaveErrorMessage(text?: string | RegExp): T;
-    toHaveFormValues(expectedValues: Record<string, unknown>): T;
-    toBePartiallyChecked(): T;
-    toContainHTML(html: string): T;
-  }
-}
+// Note: jest-dom matchers are automatically typed via @testing-library/jest-dom
+// which extends vitest's Assertion interface
 
 // ============================================================
 // Test Utilities

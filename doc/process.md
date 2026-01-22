@@ -80,6 +80,66 @@ This document tracks all development progress, feature modifications, and bug fi
 
 ---
 
+## Phase 15: 组件边缘情况测试 | Component Edge Case Testing
+**Date | 日期**: 2026-01-22
+**Status | 状态**: ✅ Completed | 已完成
+
+### User Requirements | 用户需求
+为 GuShen 前端核心组件实现全面的边缘情况测试，覆盖 95%+ 的边缘场景：
+1. 配置 Vitest 测试框架 + React Testing Library
+2. 编写 4 个核心组件的边缘情况测试（~75 个测试用例）
+3. 创建测试文档记录测试策略和覆盖范围
+
+Implement comprehensive edge case testing for GuShen frontend core components with 95%+ edge case coverage:
+1. Configure Vitest testing framework + React Testing Library
+2. Write edge case tests for 4 core components (~75 test cases)
+3. Create documentation for testing strategy and coverage
+
+### Solution Approach | 解决方案
+
+#### 测试框架配置 | Testing Framework Setup
+- **测试框架**: Vitest 2.1.8 with happy-dom
+- **组件测试**: @testing-library/react 16.x
+- **断言库**: @testing-library/jest-dom 6.x
+- **用户交互**: @testing-library/user-event 14.x
+
+#### 边缘情况分类 | Edge Case Categories
+1. **数值边缘**: NaN, Infinity, -Infinity, 1e15, <0.01, 负数, 零
+2. **字符串边缘**: null, undefined, 空字符串, >200字符, Unicode/Emoji
+3. **数组边缘**: null, 空数组, 100+元素, 无效元素
+4. **日期边缘**: 无效格式, 空日期, Unix时间戳
+5. **错误注入**: 无效类型, 网络错误, API失败
+
+### Modified/Created Files | 修改/新建的文件
+
+#### 新建测试配置文件 | New Configuration Files
+1. `gushen-web/vitest.config.ts` - Vitest 主配置（esbuild JSX 转换, happy-dom 环境）
+2. `gushen-web/src/__tests__/setup.ts` - 全局测试设置（Mock ResizeObserver, fetch 等）
+
+#### 新建测试文件 | New Test Files
+1. `gushen-web/src/components/strategy-editor/__tests__/enhanced-trade-card.test.tsx` (~45 用例)
+2. `gushen-web/src/components/strategy-editor/__tests__/backtest-basis-panel.test.tsx` (~50 用例)
+3. `gushen-web/src/components/strategy-editor/__tests__/parameter-info-dialog.test.tsx` (~45 用例)
+4. `gushen-web/src/components/strategy-editor/__tests__/backtest-panel.test.tsx` (~24 用例)
+
+#### 新建文档 | New Documentation
+1. `gushen/doc/edge-case-testing.md` - 边缘情况测试文档（中英双语）
+
+### Test Results | 测试结果
+```
+ Test Files  4 passed (4)
+       Tests  164 passed (164)
+    Duration  3.36s
+```
+
+### Key Achievements | 关键成就
+1. **164 个测试用例全部通过** | All 164 test cases passed
+2. **覆盖 4 个核心组件** | Coverage for 4 core components
+3. **测试框架配置完善** | Complete testing framework setup
+4. **文档记录完整** | Comprehensive documentation
+
+---
+
 ## Phase 12: Redis 极致优化 + Bun 运行时升级 | Redis Optimization + Bun Runtime Upgrade
 **Date | 日期**: 2026-01-22
 **Status | 状态**: 🚧 In Progress (Week 1-2 Completed) | 进行中（第1-2周已完成）
@@ -406,3 +466,72 @@ class LayeredCacheManager<T> {
    - 明确每周交付物
    - 记录所有变更到 process.md
 
+
+## 2026-01-22 GuShen 平台全面修复与增强 | Comprehensive Fix & Enhancement
+
+### 用户需求 User Requirements
+
+用户提供了全面的修复和增强计划，包含4个阶段：
+1. **Phase 1 (紧急)**: 修复投资顾问多空辩论崩溃问题
+2. **Phase 2 (中等)**: 策略编辑器参数编辑UX优化
+3. **Phase 3 (中等)**: 回测数据源透明度增强
+4. **Phase 4 (常规)**: 新增AI策略调整能力
+
+### 修改内容 Changes Made
+
+#### Phase 1: 多空辩论错误修复 (Urgent Bug Fix)
+
+**1.1 新建全局 Error Boundary 组件**
+- 文件: `gushen-web/src/components/error-boundary.tsx` (新建)
+- React class component with componentDidCatch, 中英双语错误提示
+
+**1.2 修复 advisor-chat.tsx 错误处理**
+- 文件: `gushen-web/src/components/advisor/advisor-chat.tsx`
+- 新增 validateDebateSession() 和 validateDebateArgument() 验证函数
+
+**1.3 更新 layout.tsx 添加 ErrorBoundary**
+- 文件: `gushen-web/src/app/layout.tsx`
+- 用 ErrorBoundary 包裹全局内容
+
+#### Phase 2: 策略编辑器参数编辑UX优化
+
+**2.1 添加跨参数验证**
+- 文件: `gushen-web/src/lib/strategy/parameter-parser.ts`
+- 6条验证规则: MA窗口、RSI阈值、MACD周期、止盈止损比例等
+
+**2.2 优化参数编辑器交互**
+- 文件: `gushen-web/src/components/strategy-editor/parameter-editor.tsx`
+- 新增「应用并回测」一键操作按钮
+
+#### Phase 3: 回测数据源透明度增强
+
+**3.1 增强 backtest API**
+- 文件: `gushen-web/src/app/api/backtest/route.ts`
+- 返回详细数据源信息 (type, provider, reason, fallbackUsed)
+
+**3.2 增强数据源显示**
+- 文件: `gushen-web/src/components/strategy-editor/backtest-basis-panel.tsx`
+- 模拟数据警告横幅，真实数据成功徽章
+
+#### Phase 4: AI策略调整能力（新功能）
+
+**4.1 创建策略优化API**
+- 文件: `gushen-web/src/app/api/strategy/optimize/route.ts` (新建)
+- 支持: suggest_params, explain_strategy, sensitivity_analysis
+
+**4.2 创建AI策略助手组件**
+- 文件: `gushen-web/src/components/strategy-editor/ai-strategy-assistant.tsx` (新建)
+- 三标签页: 优化建议、策略解读、敏感性分析
+
+**4.3 集成AI助手到dashboard**
+- 文件: `gushen-web/src/app/dashboard/page.tsx`
+- 在右侧列添加AI策略助手面板
+
+### 状态 Status
+
+✅ **开发完成 / Development Completed** - 2026-01-22
+- TypeScript typecheck 通过
+- ESLint 检查通过
+- 待部署验证
+
+---
