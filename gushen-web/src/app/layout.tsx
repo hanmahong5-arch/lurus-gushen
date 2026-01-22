@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import type { ErrorInfo } from "react";
 import { Inter, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { AuthSessionProvider } from "@/components/providers/session-provider";
@@ -40,19 +39,6 @@ export const metadata: Metadata = {
   },
 };
 
-/**
- * Global error handler for ErrorBoundary
- * 全局错误处理回调
- */
-function handleGlobalError(error: Error, errorInfo: ErrorInfo): void {
-  // Log error to console with context
-  console.error("[RootLayout] Global error caught:", error);
-  console.error("[RootLayout] Component stack:", errorInfo.componentStack);
-
-  // Future: Send to error tracking service (e.g., Sentry)
-  // 未来: 发送到错误追踪服务（如 Sentry）
-}
-
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -62,10 +48,9 @@ export default function RootLayout({
     <html lang="zh" className={`${inter.variable} ${jetbrainsMono.variable}`}>
       <body className="antialiased bg-background text-foreground">
         <AuthSessionProvider>
-          <ErrorBoundary
-            onError={handleGlobalError}
-            componentName="App"
-          >
+          {/* ErrorBoundary component handles logging internally */}
+          {/* ErrorBoundary 组件内部处理日志记录 */}
+          <ErrorBoundary componentName="App">
             {children}
           </ErrorBoundary>
         </AuthSessionProvider>
