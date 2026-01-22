@@ -126,7 +126,7 @@ python -m vnpy_ai_trader.src.web.app
 
 ```bash
 # SSH 到 Master 节点
-ssh root@100.98.57.55   # 密码: Lurus@ops
+ssh root@100.98.57.55   
 
 # 查看 Pod 状态
 kubectl get pods -n ai-qtrd -o wide
