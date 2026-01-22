@@ -22,6 +22,13 @@ interface CodePreviewProps {
   isLoading?: boolean;
   filename?: string;
   showMinimap?: boolean;
+  // Collapsible feature props / 折叠功能属性
+  collapsible?: boolean;
+  defaultCollapsed?: boolean;
+  onCollapseChange?: (collapsed: boolean) => void;
+  // Code-parameter linkage props / 代码-参数联动属性
+  highlightedLine?: number | null;
+  onHighlightClear?: () => void;
 }
 
 // Python syntax highlighting tokens
@@ -329,16 +336,26 @@ function LoadingAnimation() {
   );
 }
 
+// Collapsed preview lines count / 折叠时显示的行数
+const COLLAPSED_LINES = 20;
+
 export function CodePreview({
   code,
   language = "python",
   isLoading = false,
   filename = "strategy.py",
   showMinimap = true,
+  collapsible = true,
+  defaultCollapsed = false,
+  onCollapseChange,
+  highlightedLine = null,
+  onHighlightClear,
 }: CodePreviewProps) {
   const [copied, setCopied] = useState(false);
   const [scrollPercentage, setScrollPercentage] = useState(0);
+  const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
   const codeContainerRef = useRef<HTMLDivElement>(null);
+  const highlightedLineRef = useRef<HTMLDivElement>(null);
 
   // Handle scroll for minimap
   const handleScroll = useCallback(() => {
@@ -357,6 +374,31 @@ export function CodePreview({
     return () => container.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
+  // Handle collapse toggle / 处理折叠切换
+  const handleCollapseToggle = useCallback(() => {
+    const newState = !isCollapsed;
+    setIsCollapsed(newState);
+    onCollapseChange?.(newState);
+  }, [isCollapsed, onCollapseChange]);
+
+  // Auto-scroll to highlighted line / 自动滚动到高亮行
+  useEffect(() => {
+    if (highlightedLine !== null && highlightedLineRef.current && codeContainerRef.current) {
+      // Expand if collapsed / 如果折叠则展开
+      if (isCollapsed && highlightedLine > COLLAPSED_LINES) {
+        setIsCollapsed(false);
+        onCollapseChange?.(false);
+      }
+      // Scroll to highlighted line with delay for rendering / 延迟滚动等待渲染
+      setTimeout(() => {
+        highlightedLineRef.current?.scrollIntoView({
+          behavior: "smooth",
+          block: "center",
+        });
+      }, 100);
+    }
+  }, [highlightedLine, isCollapsed, onCollapseChange]);
+
   // Syntax highlighted code
   const highlightedCode = useMemo(() => {
     if (!code || language !== "python") return null;
@@ -365,6 +407,15 @@ export function CodePreview({
 
   // Line count
   const lineCount = useMemo(() => (code ? code.split("\n").length : 0), [code]);
+
+  // Collapsed lines calculation / 折叠时显示的行数计算
+  const displayedLineCount = useMemo(() => {
+    if (!isCollapsed) return lineCount;
+    return Math.min(COLLAPSED_LINES, lineCount);
+  }, [isCollapsed, lineCount]);
+
+  // Lines remaining when collapsed / 折叠时剩余行数
+  const hiddenLines = lineCount - displayedLineCount;
 
   const handleCopy = async () => {
     if (!code) return;
@@ -408,6 +459,31 @@ export function CodePreview({
               {lineCount} lines
             </span>
           )}
+          {/* Collapse/Expand toggle button / 折叠/展开切换按钮 */}
+          {collapsible && code && lineCount > COLLAPSED_LINES && (
+            <button
+              onClick={handleCollapseToggle}
+              className={cn(
+                "px-2 py-1 text-xs rounded transition-all duration-150 btn-tactile",
+                "bg-white/5 hover:bg-white/10 text-neutral-400 hover:text-neutral-200",
+                "flex items-center gap-1"
+              )}
+              title={isCollapsed ? "展开代码 / Expand code" : "折叠代码 / Collapse code"}
+            >
+              <svg
+                className={cn(
+                  "w-3 h-3 transition-transform duration-200",
+                  isCollapsed ? "rotate-0" : "rotate-180"
+                )}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              </svg>
+              {isCollapsed ? "展开" : "折叠"}
+            </button>
+          )}
           <button
             onClick={handleCopy}
             disabled={!code || isLoading}
@@ -449,37 +525,75 @@ export function CodePreview({
           <LoadingAnimation />
         ) : code ? (
           <div className="flex h-full">
-            {/* Line numbers */}
+            {/* Line numbers / 行号 */}
             <div className="shrink-0 w-12 bg-black/20 border-r border-white/5 select-none">
               <div className="py-4 pr-3 text-right">
-                {Array.from({ length: lineCount }, (_, i) => (
-                  <div
-                    key={i}
-                    className="text-[11px] leading-6 text-neutral-600 font-mono tabular-nums hover:text-neutral-400 transition-colors"
-                  >
-                    {i + 1}
-                  </div>
-                ))}
+                {Array.from({ length: displayedLineCount }, (_, i) => {
+                  const lineNum = i + 1;
+                  const isHighlighted = highlightedLine === lineNum;
+                  return (
+                    <div
+                      key={i}
+                      ref={isHighlighted ? highlightedLineRef : undefined}
+                      className={cn(
+                        "text-[11px] leading-6 font-mono tabular-nums transition-all duration-200",
+                        isHighlighted
+                          ? "text-accent bg-accent/10 border-l-2 border-accent -ml-0.5 pl-0.5"
+                          : "text-neutral-600 hover:text-neutral-400"
+                      )}
+                    >
+                      {lineNum}
+                    </div>
+                  );
+                })}
               </div>
             </div>
 
-            {/* Code with syntax highlighting */}
+            {/* Code with syntax highlighting / 带语法高亮的代码 */}
             <div
               ref={codeContainerRef}
               className={cn(
-                "flex-1 overflow-auto py-4 px-4",
-                showMinimap && code.split("\n").length > 20 && "pr-20"
+                "flex-1 overflow-auto py-4 px-4 transition-all duration-300",
+                showMinimap && !isCollapsed && lineCount > 20 && "pr-20",
+                isCollapsed && "max-h-[400px]"
               )}
             >
-              <pre className="text-[13px] font-mono">{highlightedCode}</pre>
+              <pre className="text-[13px] font-mono">
+                {/* Render only displayed lines when collapsed / 折叠时只渲染显示的行 */}
+                {isCollapsed && highlightedCode
+                  ? (highlightedCode as React.ReactNode[]).slice(0, displayedLineCount)
+                  : highlightedCode}
+              </pre>
             </div>
 
-            {/* Minimap (show for longer code) */}
-            {showMinimap && code.split("\n").length > 20 && (
+            {/* Minimap (show for longer code when not collapsed) / 小地图（非折叠且代码较长时显示） */}
+            {showMinimap && !isCollapsed && lineCount > 20 && (
               <Minimap code={code} scrollPercentage={scrollPercentage} />
             )}
           </div>
-        ) : (
+        ) : null}
+
+        {/* Collapsed indicator / 折叠指示器 */}
+        {isCollapsed && hiddenLines > 0 && (
+          <button
+            onClick={handleCollapseToggle}
+            className={cn(
+              "w-full py-2 px-4 flex items-center justify-center gap-2",
+              "bg-gradient-to-t from-surface-hover/80 to-transparent",
+              "border-t border-white/5 hover:border-accent/30",
+              "text-xs text-neutral-400 hover:text-accent",
+              "transition-all duration-200 cursor-pointer"
+            )}
+          >
+            <span className="font-mono">···</span>
+            <span>还有 {hiddenLines} 行代码</span>
+            <span className="text-neutral-500">|</span>
+            <span>{hiddenLines} more lines</span>
+            <span className="font-mono">···</span>
+          </button>
+        )}
+
+        {code ? null : (
           <div className="flex flex-col items-center justify-center h-full p-8 text-center">
             <div className="w-16 h-16 mb-4 rounded-xl bg-surface-hover/50 flex items-center justify-center">
               <svg className="w-8 h-8 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">

@@ -1,6 +1,6 @@
 # GuShen 量化交易平台 - 项目信息
 
-> 最后更新: 2026-01-22
+> 最后更新: 2026-01-23
 
 ## 项目概览
 
@@ -8,7 +8,7 @@
 
 | 组件 | 技术栈 | 部署状态 | 访问地址 |
 |------|--------|---------|----------|
-| gushen-web | Next.js 14 + TypeScript + TailwindCSS + **Bun** | ✅ 运行中 (v15) | https://gushen.lurus.cn |
+| gushen-web | Next.js 14 + TypeScript + TailwindCSS + **Bun** | ✅ 运行中 (v20) | https://gushen.lurus.cn |
 | lurus-ai-qtrd | FastAPI + VNPy 4.x + Python 3.11 | ✅ 运行中 (v1.0.4) | https://gushen.lurus.cn/api/* |
 
 > **⚠️ 重要**: 前端项目统一使用 **bun** 作为包管理器和运行时，不使用 npm。详见根目录 CLAUDE.md。
@@ -20,12 +20,30 @@
 - **参数可视化编辑**: 实时编辑策略参数
 - **跨参数验证**: 自动验证参数逻辑关系 (如 fast_window < slow_window)
 - **一键应用并回测**: 参数修改后快速验证效果
+- **代码窗口折叠/展开**: 收起时显示20行代码摘要，平滑过渡动画 (NEW)
+- **参数-代码联动**: 编辑参数时自动定位并高亮代码对应行 (NEW)
+- **AI参数边界分析**: 智能分析参数功用、边界、安全区/危险区 (NEW)
 
 ### 回测系统 Backtest System
 - **金融级精度**: 使用 Decimal.js 进行金融计算
 - **数据源透明**: 清晰显示数据来源 (实盘/模拟)
 - **30+ 指标**: 夏普比率、最大回撤、胜率等完整指标
 - **增强交易记录**: 显示成本明细、触发依据、持仓变化
+- **数据库优先回测**: PostgreSQL K线数据优先，API作为降级备选 (NEW)
+- **数据覆盖率显示**: 显示数据库覆盖率和数据源状态 (NEW)
+
+### 券商API架构 Broker API Architecture (NEW)
+- **可扩展接口**: IBrokerAdapter 标准化接口设计
+- **模拟券商**: 完整的 Mock 交易实现，支持 A 股规则 (T+1、100股整数倍)
+- **费用模拟**: 佣金、印花税、过户费精确计算
+- **事件驱动**: 订单/持仓/资金变化实时事件通知
+- **多券商预留**: 东方财富、富途、老虎、IB 接口预留
+
+### 多租户历史记录 Multi-Tenant History (NEW)
+- **策略历史**: 版本控制、标签、收藏
+- **回测历史**: 详细配置和结果存储
+- **交易历史**: 完整交易记录和统计
+- **权限管理**: owner/admin/member/viewer 角色体系
 
 ### AI 策略助手 AI Strategy Assistant (NEW)
 - **参数优化建议**: 基于回测结果的智能参数建议
@@ -55,7 +73,7 @@
 
 | Pod | 镜像版本 | 节点 | 状态 |
 |-----|---------|------|------|
-| ai-qtrd-web | gushen-web:v15 | cloud-ubuntu-3-2c2g | ✅ Running |
+| ai-qtrd-web | gushen-web:v20 | cloud-ubuntu-3-2c2g | ✅ Running |
 | ai-qtrd-api | lurus-ai-qtrd:v1.0.4 | cloud-ubuntu-2-4c8g | ✅ Running |
 
 ### 集群节点
@@ -185,6 +203,18 @@ kubectl rollout restart deployment/ai-qtrd-web -n ai-qtrd
   - Vitest + React Testing Library 测试框架配置
   - 75+ 边缘情况测试用例 (4个测试文件)
   - 测试覆盖: 数值边缘(NaN/Infinity/1e15)、字符串边缘(null/空/长文本)、数组边缘、日期格式、错误回调
+- [x] **Phase A**: 核心UI增强 (2026-01-23)
+  - A-1: 代码窗口折叠/展开功能 (20行摘要、平滑动画)
+  - A-2: 参数编辑器与代码联动 (焦点同步、行高亮、自动滚动)
+  - A-3: AI参数边界分析 (安全区/危险区可视化、分级用户指导)
+- [x] **Phase B**: 数据层增强 (2026-01-23)
+  - B-1: 数据库优先回测 (PostgreSQL K线 → API → Mock 优先级)
+  - B-2: 多租户历史记录存储 (5个新表、权限控制、分页查询)
+- [x] **Phase C**: 券商API预留架构 (2026-01-23)
+  - IBrokerAdapter 标准化接口 (连接、账户、订单、行情)
+  - Mock券商完整实现 (A股规则、费用计算、事件系统)
+  - useBroker React Hook 封装
+  - 东方财富/富途/老虎/IB 接口预留
 
 ### 前端页面
 - `/` - 首页

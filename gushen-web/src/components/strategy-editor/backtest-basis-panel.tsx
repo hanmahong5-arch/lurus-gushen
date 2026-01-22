@@ -36,6 +36,10 @@ interface EnhancedDataSourceInfo {
   fallbackUsed: boolean;
   realDataCount: number;
   simulatedDataCount: number;
+  /** Database coverage rate / 数据库覆盖率 */
+  dbCoverage?: number;
+  /** Stock name from database / 数据库中的股票名称 */
+  stockName?: string;
 }
 
 interface BacktestBasisPanelProps {
@@ -390,18 +394,41 @@ export function BacktestBasisPanel({ result, className, onError, dataSourceInfo 
           <div className="mb-4 p-3 bg-profit/10 border border-profit/20 rounded-lg">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-profit/20 flex items-center justify-center shrink-0">
-                <svg className="w-4 h-4 text-profit" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+                {dataSourceInfo?.provider === "postgresql-database" ? (
+                  // Database icon for database source
+                  <svg className="w-4 h-4 text-profit" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
+                  </svg>
+                ) : (
+                  // Check icon for API source
+                  <svg className="w-4 h-4 text-profit" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                )}
               </div>
               <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium text-profit">
-                  真实历史数据回测
+                <div className="text-sm font-medium text-profit flex items-center gap-2">
+                  {dataSourceInfo?.provider === "postgresql-database" ? "数据库真实数据" : "真实历史数据回测"}
+                  {/* Database coverage badge */}
+                  {dataSourceInfo?.dbCoverage !== undefined && (
+                    <span className="px-1.5 py-0.5 text-[10px] bg-profit/20 text-profit rounded font-mono tabular-nums">
+                      覆盖率 {(dataSourceInfo.dbCoverage * 100).toFixed(1)}%
+                    </span>
+                  )}
                 </div>
                 <div className="text-xs text-neutral-400">
                   已获取 <span className="font-mono tabular-nums text-neutral-300">{dataSourceInfo?.realDataCount ?? dataPoints}</span> 条真实K线数据
                   {dataSourceInfo?.provider && (
-                    <span className="text-neutral-500"> (来源: {dataSourceInfo.provider})</span>
+                    <span className="text-neutral-500">
+                      {" "}(来源: {
+                        dataSourceInfo.provider === "postgresql-database"
+                          ? "PostgreSQL数据库"
+                          : dataSourceInfo.provider
+                      })
+                    </span>
+                  )}
+                  {dataSourceInfo?.stockName && (
+                    <span className="text-neutral-500"> | {dataSourceInfo.stockName}</span>
                   )}
                 </div>
               </div>
@@ -446,6 +473,8 @@ export function BacktestBasisPanel({ result, className, onError, dataSourceInfo 
             "p-3 rounded-lg border",
             isSimulatedData
               ? "bg-amber-500/5 border-amber-500/20"
+              : dataSourceInfo?.provider === "postgresql-database"
+              ? "bg-profit/5 border-profit/20"
               : "bg-void/30 border-white/5"
           )}>
             <h4 className="text-xs font-medium text-neutral-400 mb-2 flex items-center gap-1.5">
@@ -458,9 +487,25 @@ export function BacktestBasisPanel({ result, className, onError, dataSourceInfo 
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">数据提供商</span>
                 <span className="text-neutral-300" title={dataSourceInfo?.provider || meta.dataSource}>
-                  {dataSourceInfo?.provider || dataSource}
+                  {dataSourceInfo?.provider === "postgresql-database"
+                    ? "PostgreSQL 数据库"
+                    : dataSourceInfo?.provider || dataSource}
                 </span>
               </div>
+              {/* Show database coverage if available */}
+              {dataSourceInfo?.dbCoverage !== undefined && (
+                <div className="flex items-center justify-between">
+                  <span className="text-neutral-500">数据覆盖率</span>
+                  <span className={cn(
+                    "font-mono tabular-nums font-medium",
+                    dataSourceInfo.dbCoverage >= 0.95 ? "text-profit" :
+                    dataSourceInfo.dbCoverage >= 0.85 ? "text-yellow-400" :
+                    "text-orange-400"
+                  )}>
+                    {(dataSourceInfo.dbCoverage * 100).toFixed(1)}%
+                  </span>
+                </div>
+              )}
               <div className="flex items-center justify-between">
                 <span className="text-neutral-500">数据类型</span>
                 <div className="flex items-center gap-1.5">

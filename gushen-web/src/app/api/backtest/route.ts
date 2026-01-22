@@ -4,6 +4,12 @@
  *
  * POST /api/backtest - Run a backtest with generated strategy
  *
+ * Data Source Priority (数据源优先级):
+ * 1. PostgreSQL database (kline_daily table) - 数据库优先
+ * 2. EastMoney API - 东方财富API
+ * 3. Sina API (fallback) - 新浪API降级
+ * 4. Mock generator (demo only) - 模拟数据（仅演示）
+ *
  * Request body:
  * {
  *   strategyCode: string,     // Generated strategy code
@@ -27,6 +33,7 @@ import {
   type BacktestKline,
 } from "@/lib/backtest/engine";
 import { getKLineData } from "@/lib/data-service";
+import { getKLineFromDatabase, checkDataAvailability } from "@/lib/backtest/db-kline-provider";
 
 // Data source tracking interface
 interface DataSourceInfo {
@@ -36,6 +43,10 @@ interface DataSourceInfo {
   fallbackUsed: boolean;
   realDataCount: number;
   simulatedDataCount: number;
+  /** Database coverage rate / 数据库覆盖率 */
+  dbCoverage?: number;
+  /** Stock name from database / 数据库中的股票名称 */
+  stockName?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -103,61 +114,131 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Get K-line data
+    // Get K-line data with priority: Database → API → Mock
     let klines: BacktestKline[] = [];
-    let realDataFetchError: string | null = null;
+    let dataFetchAttempts: string[] = [];
 
-    // Try to fetch real data if symbol is provided
+    // Only fetch real data if symbol is provided and not mock mode
     if (config.symbol && config.symbol !== "mock") {
-      try {
-        const klineResult = await getKLineData(
-          config.symbol,
-          config.timeframe,
-          Math.min(days + 60, 500) // Extra bars for indicator calculation
-        );
+      // ====================================================================
+      // Priority 1: Try PostgreSQL Database First (数据库优先)
+      // ====================================================================
+      if (config.timeframe === "1d") {
+        // Database only supports daily K-line data
+        try {
+          console.log(`[Backtest] Attempting database fetch for ${config.symbol}...`);
+          const dbResult = await getKLineFromDatabase(
+            config.symbol,
+            config.startDate,
+            config.endDate,
+            Math.min(days + 60, 800) // Extra bars for indicator calculation
+          );
 
-        if (klineResult.success && klineResult.data && klineResult.data.length > 0) {
-          // Convert to backtest format
-          klines = klineResult.data.map((k) => ({
-            time: typeof k.time === "number" ? k.time : Math.floor(new Date(k.time).getTime() / 1000),
-            open: k.open,
-            high: k.high,
-            low: k.low,
-            close: k.close,
-            volume: k.volume,
-          }));
+          if (dbResult.success && dbResult.data.length > 0) {
+            // Convert to backtest format
+            klines = dbResult.data.map((k) => ({
+              time: typeof k.time === "number" ? k.time : Math.floor(new Date(String(k.time)).getTime() / 1000),
+              open: k.open,
+              high: k.high,
+              low: k.low,
+              close: k.close,
+              volume: k.volume,
+            }));
 
-          // Update data source info for real data
-          dataSourceInfo = {
-            type: "real",
-            provider: klineResult.source || "eastmoney",
-            reason: "Successfully fetched real market data",
-            fallbackUsed: false,
-            realDataCount: klines.length,
-            simulatedDataCount: 0,
-          };
-        } else {
-          realDataFetchError = klineResult.error || "No data returned from API";
+            // Update data source info for database data
+            dataSourceInfo = {
+              type: "real",
+              provider: "postgresql-database",
+              reason: `Database data with ${(dbResult.coverage * 100).toFixed(1)}% coverage`,
+              fallbackUsed: false,
+              realDataCount: klines.length,
+              simulatedDataCount: 0,
+              dbCoverage: dbResult.coverage,
+              stockName: dbResult.stockInfo?.name,
+            };
+
+            console.log(`[Backtest] Database fetch successful: ${klines.length} bars, coverage: ${(dbResult.coverage * 100).toFixed(1)}%`);
+          } else {
+            dataFetchAttempts.push(`Database: ${dbResult.error || 'No data'}`);
+            console.log(`[Backtest] Database fetch failed: ${dbResult.error}`);
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "Database error";
+          dataFetchAttempts.push(`Database: ${errMsg}`);
+          console.warn("[Backtest] Database fetch error:", errMsg);
         }
-      } catch (err) {
-        realDataFetchError = err instanceof Error ? err.message : "Unknown fetch error";
-        console.warn("Failed to fetch real K-line data:", realDataFetchError);
+      } else {
+        dataFetchAttempts.push(`Database: Only supports daily (1d) timeframe, requested ${config.timeframe}`);
+      }
+
+      // ====================================================================
+      // Priority 2 & 3: Try EastMoney/Sina API (API降级)
+      // ====================================================================
+      if (klines.length === 0) {
+        try {
+          console.log(`[Backtest] Attempting API fetch for ${config.symbol}...`);
+          const klineResult = await getKLineData(
+            config.symbol,
+            config.timeframe,
+            Math.min(days + 60, 500)
+          );
+
+          if (klineResult.success && klineResult.data && klineResult.data.length > 0) {
+            // Convert to backtest format
+            klines = klineResult.data.map((k) => ({
+              time: typeof k.time === "number" ? k.time : Math.floor(new Date(String(k.time)).getTime() / 1000),
+              open: k.open,
+              high: k.high,
+              low: k.low,
+              close: k.close,
+              volume: k.volume,
+            }));
+
+            // Update data source info for API data
+            dataSourceInfo = {
+              type: "real",
+              provider: klineResult.source || "eastmoney-api",
+              reason: dataFetchAttempts.length > 0
+                ? `API fallback (DB: ${dataFetchAttempts[0]})`
+                : "Successfully fetched from market data API",
+              fallbackUsed: dataFetchAttempts.length > 0,
+              realDataCount: klines.length,
+              simulatedDataCount: 0,
+            };
+
+            console.log(`[Backtest] API fetch successful: ${klines.length} bars from ${klineResult.source}`);
+          } else {
+            dataFetchAttempts.push(`API: ${klineResult.error || 'No data returned'}`);
+            console.log(`[Backtest] API fetch failed: ${klineResult.error}`);
+          }
+        } catch (err) {
+          const errMsg = err instanceof Error ? err.message : "API error";
+          dataFetchAttempts.push(`API: ${errMsg}`);
+          console.warn("[Backtest] API fetch error:", errMsg);
+        }
       }
     } else {
-      realDataFetchError = config.symbol === "mock"
-        ? "Mock mode requested by user"
-        : "No symbol provided";
+      dataFetchAttempts.push(
+        config.symbol === "mock"
+          ? "Mock mode requested by user"
+          : "No symbol provided"
+      );
     }
 
-    // If no real data, generate mock data
+    // ====================================================================
+    // Priority 4: Generate Mock Data (模拟数据降级)
+    // ====================================================================
     if (klines.length === 0) {
+      console.log(`[Backtest] Generating mock data for ${days} days...`);
       klines = generateBacktestData(days, 50 + Math.random() * 100, 0.02);
 
       // Update data source info for simulated data
       dataSourceInfo = {
         type: "simulated",
         provider: "mock-generator",
-        reason: realDataFetchError || "Fallback to simulated data",
+        reason: dataFetchAttempts.length > 0
+          ? `Fallback to mock (${dataFetchAttempts.join('; ')})`
+          : "Mock mode requested",
         fallbackUsed: config.symbol !== "mock" && config.symbol !== undefined,
         realDataCount: 0,
         simulatedDataCount: klines.length,
@@ -204,6 +285,9 @@ export async function POST(request: NextRequest) {
           fallbackUsed: dataSourceInfo.fallbackUsed,
           realDataCount: dataSourceInfo.realDataCount,
           simulatedDataCount: dataSourceInfo.simulatedDataCount,
+          // Database-specific fields
+          dbCoverage: dataSourceInfo.dbCoverage,
+          stockName: dataSourceInfo.stockName,
         },
         // Legacy field for backward compatibility
         dataSourceLegacy: dataSourceInfo.type === "real" ? "real" : "simulated",

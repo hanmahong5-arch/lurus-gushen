@@ -38,6 +38,23 @@ interface BacktestConfig {
   timeframe: "1d" | "1w" | "60m" | "30m" | "15m" | "5m" | "1m";
 }
 
+/**
+ * Data source info from API response
+ * API响应中的数据源信息
+ */
+interface DataSourceInfo {
+  type: "real" | "simulated" | "mixed";
+  provider: string;
+  reason: string;
+  fallbackUsed: boolean;
+  realDataCount: number;
+  simulatedDataCount: number;
+  /** Database coverage rate / 数据库覆盖率 */
+  dbCoverage?: number;
+  /** Stock name from database / 数据库中的股票名称 */
+  stockName?: string;
+}
+
 interface BacktestPanelProps {
   strategyCode: string;
   result?: BacktestResult;
@@ -125,6 +142,7 @@ export function BacktestPanel({
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dataSourceInfo, setDataSourceInfo] = useState<DataSourceInfo | null>(null);
 
   const displayResult = externalResult ?? result;
   const running = externalIsRunning || isRunning;
@@ -175,6 +193,10 @@ export function BacktestPanel({
 
         if (data.success && data.data) {
           setResult(data.data);
+          // Store data source info from API response
+          if (data.meta?.dataSource) {
+            setDataSourceInfo(data.meta.dataSource);
+          }
         } else {
           setError(data.error ?? "回测失败 / Backtest failed");
         }
@@ -514,7 +536,11 @@ export function BacktestPanel({
             )}
 
             {/* Backtest Basis Panel - Show data source and configuration transparency */}
-            <BacktestBasisPanel result={displayResult} className="mb-4" />
+            <BacktestBasisPanel
+              result={displayResult}
+              dataSourceInfo={dataSourceInfo}
+              className="mb-4"
+            />
 
             {/* Main Metrics Grid / 核心指标网格 */}
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">

@@ -21,7 +21,7 @@ import { NextRequest, NextResponse } from "next/server";
 /**
  * Optimization action types
  */
-type OptimizationAction = "suggest_params" | "explain_strategy" | "sensitivity_analysis";
+type OptimizationAction = "suggest_params" | "explain_strategy" | "sensitivity_analysis" | "analyze_boundaries";
 
 /**
  * Request body interface
@@ -39,6 +39,9 @@ interface OptimizeRequest {
   };
   currentParameters?: Record<string, number>;
   symbol?: string;
+  // For boundary analysis / 用于边界分析
+  parameterName?: string;
+  currentValue?: number;
 }
 
 /**
@@ -89,7 +92,7 @@ interface SensitivityAnalysis {
 export async function POST(request: NextRequest) {
   try {
     const body: OptimizeRequest = await request.json();
-    const { action, strategyCode, backtestResult, currentParameters } = body;
+    const { action, strategyCode, backtestResult, currentParameters, parameterName, currentValue } = body;
 
     // Validate request
     if (!action || !strategyCode) {
@@ -109,6 +112,9 @@ export async function POST(request: NextRequest) {
 
       case "sensitivity_analysis":
         return handleSensitivityAnalysis(strategyCode, currentParameters);
+
+      case "analyze_boundaries":
+        return handleAnalyzeBoundaries(strategyCode, parameterName, currentValue);
 
       default:
         return NextResponse.json(
@@ -558,6 +564,307 @@ function extractMACDConfig(code: string): string {
   const slow = slowMatch?.[1] ?? "26";
   const signal = signalMatch?.[1] ?? "9";
   return `快线${fast}/慢线${slow}/信号${signal}`;
+}
+
+// =============================================================================
+// BOUNDARY ANALYSIS / 边界分析
+// =============================================================================
+
+/**
+ * Parameter boundary definitions
+ * 参数边界定义
+ */
+const PARAMETER_BOUNDARIES: Record<string, {
+  theoreticalMin: number;
+  theoreticalMax: number;
+  practicalMin: number;
+  practicalMax: number;
+  optimalRange: { min: number; max: number };
+  role: string;
+  roleEn: string;
+  affectedIndicators: string[];
+  impactDescription: string;
+  impactDescriptionEn: string;
+  guidance: {
+    beginner: string;
+    intermediate: string;
+    advanced: string;
+    riskWarning?: string;
+  };
+}> = {
+  fast_window: {
+    theoreticalMin: 1,
+    theoreticalMax: 250,
+    practicalMin: 2,
+    practicalMax: 30,
+    optimalRange: { min: 3, max: 15 },
+    role: "控制短期均线的计算周期，决定对价格变化的敏感度",
+    roleEn: "Controls the calculation period for short-term MA, determines sensitivity to price changes",
+    affectedIndicators: ["SMA", "EMA", "MA Crossover"],
+    impactDescription: "周期越短，信号越敏感但噪音越多；周期越长，信号越稳定但滞后性越强",
+    impactDescriptionEn: "Shorter period = more sensitive but noisier; longer period = more stable but more lag",
+    guidance: {
+      beginner: "建议使用5-10日，这是最常见的短期周期设置，适合捕捉短期趋势",
+      intermediate: "可尝试3-7日用于日内交易，10-15日用于波段交易，根据交易风格调整",
+      advanced: "结合ATR动态调整周期，在高波动时延长周期，低波动时缩短周期",
+      riskWarning: "周期小于3可能产生大量虚假信号，导致频繁交易和高成本",
+    },
+  },
+  slow_window: {
+    theoreticalMin: 2,
+    theoreticalMax: 500,
+    practicalMin: 10,
+    practicalMax: 120,
+    optimalRange: { min: 15, max: 60 },
+    role: "控制长期均线的计算周期，用于确认主趋势方向",
+    roleEn: "Controls the calculation period for long-term MA, used to confirm main trend direction",
+    affectedIndicators: ["SMA", "EMA", "MA Crossover"],
+    impactDescription: "与快线形成交叉信号，周期差距影响信号频率和可靠性",
+    impactDescriptionEn: "Forms crossover signals with fast line, period difference affects signal frequency and reliability",
+    guidance: {
+      beginner: "建议使用20-30日，与快线保持3-5倍的比例关系",
+      intermediate: "可使用50日或60日作为中期趋势参考，200日作为长期趋势判断",
+      advanced: "考虑使用EMA替代SMA以减少滞后，或使用自适应均线",
+      riskWarning: "快慢线比例小于2倍可能导致过于频繁的交叉信号",
+    },
+  },
+  rsi_window: {
+    theoreticalMin: 2,
+    theoreticalMax: 100,
+    practicalMin: 5,
+    practicalMax: 30,
+    optimalRange: { min: 10, max: 21 },
+    role: "RSI指标的计算周期，影响超买超卖信号的敏感度",
+    roleEn: "Calculation period for RSI indicator, affects sensitivity of overbought/oversold signals",
+    affectedIndicators: ["RSI"],
+    impactDescription: "经典设置为14日，短周期更敏感，长周期更稳定",
+    impactDescriptionEn: "Classic setting is 14 days, shorter period = more sensitive, longer period = more stable",
+    guidance: {
+      beginner: "使用经典的14日周期，这是Wilder提出的原始设置",
+      intermediate: "日内交易可用7-9日，波段交易可用14-21日",
+      advanced: "可结合ATR调整周期，或使用多周期RSI进行确认",
+      riskWarning: "周期过短（<7）在震荡市中会产生大量虚假信号",
+    },
+  },
+  rsi_buy: {
+    theoreticalMin: 0,
+    theoreticalMax: 100,
+    practicalMin: 15,
+    practicalMax: 45,
+    optimalRange: { min: 25, max: 35 },
+    role: "RSI买入阈值，低于此值视为超卖，产生买入信号",
+    roleEn: "RSI buy threshold, values below this are considered oversold and generate buy signals",
+    affectedIndicators: ["RSI", "Entry Signal"],
+    impactDescription: "阈值越低，信号越保守但机会越少；阈值越高，信号越激进但风险越大",
+    impactDescriptionEn: "Lower threshold = more conservative but fewer opportunities; higher threshold = more aggressive but higher risk",
+    guidance: {
+      beginner: "使用经典的30作为买入阈值，简单有效",
+      intermediate: "在牛市中可适当提高至35-40，熊市中降低至20-25",
+      advanced: "结合价格位置和成交量确认，避免在下跌趋势中抄底",
+      riskWarning: "阈值过高容易在下跌趋势中过早买入，造成被套",
+    },
+  },
+  rsi_sell: {
+    theoreticalMin: 0,
+    theoreticalMax: 100,
+    practicalMin: 55,
+    practicalMax: 85,
+    optimalRange: { min: 65, max: 75 },
+    role: "RSI卖出阈值，高于此值视为超买，产生卖出信号",
+    roleEn: "RSI sell threshold, values above this are considered overbought and generate sell signals",
+    affectedIndicators: ["RSI", "Exit Signal"],
+    impactDescription: "阈值越低，退出越保守可能错过大涨；阈值越高，可能在顶部附近才退出",
+    impactDescriptionEn: "Lower threshold = more conservative exit may miss rallies; higher threshold = exit near tops",
+    guidance: {
+      beginner: "使用经典的70作为卖出阈值",
+      intermediate: "强势行情中可提高至75-80，避免过早止盈",
+      advanced: "结合趋势强度指标，强趋势中适当延迟卖出",
+      riskWarning: "阈值过低可能在强势行情中过早卖出，错失利润",
+    },
+  },
+  stop_loss: {
+    theoreticalMin: 0.1,
+    theoreticalMax: 50,
+    practicalMin: 1,
+    practicalMax: 15,
+    optimalRange: { min: 3, max: 8 },
+    role: "止损比例(%)，控制单笔交易的最大亏损",
+    roleEn: "Stop loss percentage, controls maximum loss per trade",
+    affectedIndicators: ["Risk Management", "Position Size"],
+    impactDescription: "止损越紧，风险越小但容易被震出；止损越宽，允许更大波动但风险敞口大",
+    impactDescriptionEn: "Tighter stop = less risk but easier to get stopped out; wider stop = allows more volatility but higher risk exposure",
+    guidance: {
+      beginner: "建议5-8%的止损，平衡风险和被震出的概率",
+      intermediate: "根据ATR动态设置止损，一般为1.5-2倍ATR",
+      advanced: "考虑使用移动止损、时间止损等多维度风控",
+      riskWarning: "止损过紧(<2%)在正常波动中容易被触发，止损过宽(>10%)可能造成较大亏损",
+    },
+  },
+  fixed_size: {
+    theoreticalMin: 1,
+    theoreticalMax: 10000,
+    practicalMin: 1,
+    practicalMax: 100,
+    optimalRange: { min: 1, max: 10 },
+    role: "固定交易手数，决定每次交易的仓位大小",
+    roleEn: "Fixed position size (lots), determines position size per trade",
+    affectedIndicators: ["Position Size", "Risk Exposure"],
+    impactDescription: "仓位越大，盈亏波动越大；仓位越小，资金利用率越低",
+    impactDescriptionEn: "Larger position = higher P&L volatility; smaller position = lower capital utilization",
+    guidance: {
+      beginner: "建议从1手开始，熟悉策略后再增加",
+      intermediate: "根据账户资金和风险偏好设置，一般单笔风险不超过总资金2%",
+      advanced: "使用Kelly公式或固定百分比仓位管理",
+      riskWarning: "仓位过大可能导致账户大幅波动，影响交易心态",
+    },
+  },
+  macd_fast: {
+    theoreticalMin: 2,
+    theoreticalMax: 50,
+    practicalMin: 5,
+    practicalMax: 20,
+    optimalRange: { min: 8, max: 15 },
+    role: "MACD快线EMA周期，影响MACD对短期动量的敏感度",
+    roleEn: "MACD fast EMA period, affects MACD sensitivity to short-term momentum",
+    affectedIndicators: ["MACD", "MACD Histogram"],
+    impactDescription: "经典设置为12，与慢线26和信号线9配合使用",
+    impactDescriptionEn: "Classic setting is 12, used with slow line 26 and signal line 9",
+    guidance: {
+      beginner: "使用经典的12-26-9设置",
+      intermediate: "日内交易可用5-13-6，波段交易可用12-26-9",
+      advanced: "可尝试8-17-9等变体，根据品种特性调整",
+    },
+  },
+  macd_slow: {
+    theoreticalMin: 5,
+    theoreticalMax: 100,
+    practicalMin: 15,
+    practicalMax: 50,
+    optimalRange: { min: 20, max: 35 },
+    role: "MACD慢线EMA周期，提供趋势的基准参考",
+    roleEn: "MACD slow EMA period, provides trend baseline reference",
+    affectedIndicators: ["MACD", "MACD Histogram"],
+    impactDescription: "与快线配合形成MACD值，周期越长趋势判断越稳定",
+    impactDescriptionEn: "Works with fast line to form MACD value, longer period = more stable trend determination",
+    guidance: {
+      beginner: "使用经典的26日周期",
+      intermediate: "保持与快线约2倍的比例关系",
+      advanced: "根据市场周期特性微调",
+    },
+  },
+  macd_signal: {
+    theoreticalMin: 2,
+    theoreticalMax: 30,
+    practicalMin: 5,
+    practicalMax: 15,
+    optimalRange: { min: 7, max: 12 },
+    role: "MACD信号线EMA周期，用于产生交叉信号",
+    roleEn: "MACD signal EMA period, used to generate crossover signals",
+    affectedIndicators: ["MACD", "MACD Signal Crossover"],
+    impactDescription: "周期越短信号越快但噪音越多",
+    impactDescriptionEn: "Shorter period = faster signals but more noise",
+    guidance: {
+      beginner: "使用经典的9日周期",
+      intermediate: "可根据交易频率需求在6-12之间调整",
+      advanced: "结合柱状图高度和背离信号使用",
+    },
+  },
+};
+
+/**
+ * Handle boundary analysis request
+ * 处理边界分析请求
+ */
+async function handleAnalyzeBoundaries(
+  strategyCode: string,
+  parameterName?: string,
+  currentValue?: number
+): Promise<NextResponse> {
+  if (!parameterName) {
+    return NextResponse.json(
+      { success: false, error: "Parameter name is required" },
+      { status: 400 }
+    );
+  }
+
+  // Get boundary definition for the parameter
+  const boundaryDef = PARAMETER_BOUNDARIES[parameterName];
+
+  if (!boundaryDef) {
+    // Return generic boundaries for unknown parameters
+    return NextResponse.json({
+      success: true,
+      action: "analyze_boundaries",
+      data: {
+        parameterName,
+        displayName: parameterName,
+        boundaries: {
+          theoreticalMin: 0,
+          theoreticalMax: 1000,
+          practicalMin: 1,
+          practicalMax: 100,
+          optimalRange: { min: 5, max: 50 },
+        },
+        functionAnalysis: {
+          role: "此参数的具体作用需要根据策略上下文分析",
+          affectedIndicators: [],
+          impactDescription: "参数值的变化会影响策略的行为表现",
+        },
+        guidance: {
+          beginner: "建议从默认值开始，小幅度调整观察效果",
+          intermediate: "通过回测验证不同参数值的表现",
+          advanced: "可进行参数优化和敏感性分析",
+        },
+      },
+    });
+  }
+
+  return NextResponse.json({
+    success: true,
+    action: "analyze_boundaries",
+    data: {
+      parameterName,
+      displayName: getParameterDisplayName(parameterName),
+      boundaries: {
+        theoreticalMin: boundaryDef.theoreticalMin,
+        theoreticalMax: boundaryDef.theoreticalMax,
+        practicalMin: boundaryDef.practicalMin,
+        practicalMax: boundaryDef.practicalMax,
+        optimalRange: boundaryDef.optimalRange,
+      },
+      functionAnalysis: {
+        role: boundaryDef.role,
+        affectedIndicators: boundaryDef.affectedIndicators,
+        impactDescription: boundaryDef.impactDescription,
+      },
+      guidance: boundaryDef.guidance,
+    },
+  });
+}
+
+/**
+ * Get display name for parameter
+ * 获取参数的显示名称
+ */
+function getParameterDisplayName(name: string): string {
+  const displayNames: Record<string, string> = {
+    fast_window: "快线周期",
+    slow_window: "慢线周期",
+    rsi_window: "RSI周期",
+    rsi_buy: "RSI买入阈值",
+    rsi_sell: "RSI卖出阈值",
+    stop_loss: "止损比例 (%)",
+    take_profit: "止盈比例 (%)",
+    fixed_size: "固定手数",
+    macd_fast: "MACD快线周期",
+    macd_slow: "MACD慢线周期",
+    macd_signal: "MACD信号线周期",
+    atr_window: "ATR周期",
+    atr_multiplier: "ATR倍数",
+    boll_window: "布林带周期",
+    boll_dev: "布林带标准差",
+  };
+  return displayNames[name] || name;
 }
 
 export const dynamic = "force-dynamic";

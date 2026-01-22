@@ -11,7 +11,7 @@
 
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { ParameterBoundaryPanel } from "./parameter-boundary-panel";
 
 // Types for API responses
 interface ParameterSuggestion {
@@ -179,6 +180,17 @@ export function AIStrategyAssistant({
 
   // Sensitivity analysis state
   const [sensitivity, setSensitivity] = useState<SensitivityAnalysis | null>(null);
+
+  // Convert currentParameters to format needed by ParameterBoundaryPanel
+  // 转换 currentParameters 为 ParameterBoundaryPanel 需要的格式
+  const parameterList = useMemo(() => {
+    if (!currentParameters) return [];
+    return currentParameters.map((p) => ({
+      name: p.name,
+      displayName: p.name,
+      value: p.value,
+    }));
+  }, [currentParameters]);
 
   // Collapsible sections state
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
@@ -858,7 +870,7 @@ export function AIStrategyAssistant({
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3 mb-4">
+          <TabsList className="grid w-full grid-cols-4 mb-4">
             <TabsTrigger value="optimize" className="text-xs">
               🎯 优化建议
             </TabsTrigger>
@@ -867,6 +879,9 @@ export function AIStrategyAssistant({
             </TabsTrigger>
             <TabsTrigger value="sensitivity" className="text-xs">
               📊 敏感性
+            </TabsTrigger>
+            <TabsTrigger value="boundaries" className="text-xs">
+              🎚️ 参数边界
             </TabsTrigger>
           </TabsList>
 
@@ -880,6 +895,14 @@ export function AIStrategyAssistant({
 
           <TabsContent value="sensitivity" className="mt-0">
             {renderSensitivityContent()}
+          </TabsContent>
+
+          <TabsContent value="boundaries" className="mt-0">
+            <ParameterBoundaryPanel
+              parameters={parameterList}
+              strategyCode={strategyCode}
+              onApplyValue={onApplyParameter ? (name, value) => onApplyParameter(name, value) : undefined}
+            />
           </TabsContent>
         </Tabs>
 

@@ -61,6 +61,12 @@ interface ParameterEditorProps {
    * 回测是否正在运行
    */
   isBacktesting?: boolean;
+
+  /**
+   * Callback when a parameter is focused - for code-parameter linkage
+   * 参数获取焦点时的回调 - 用于代码-参数联动
+   */
+  onParameterFocus?: (lineNumber: number | null) => void;
 }
 
 // =============================================================================
@@ -73,6 +79,7 @@ export function ParameterEditor({
   readOnly = false,
   onRerunBacktest,
   isBacktesting = false,
+  onParameterFocus,
 }: ParameterEditorProps) {
   // Parse strategy code to extract parameters
   const parsedResult = useMemo(() => parseStrategyParameters(code), [code]);
@@ -369,6 +376,7 @@ export function ParameterEditor({
                         error={errors[param.name]}
                         isModified={modifiedParams.has(param.name)}
                         readOnly={readOnly}
+                        onFocus={onParameterFocus}
                       />
                     ))}
                   </div>
@@ -464,6 +472,7 @@ interface ParameterInputProps {
   error?: string;
   isModified: boolean;
   readOnly: boolean;
+  onFocus?: (lineNumber: number | null) => void;
 }
 
 function ParameterInput({
@@ -472,13 +481,30 @@ function ParameterInput({
   error,
   isModified,
   readOnly,
+  onFocus,
 }: ParameterInputProps) {
-  const { name, displayName, type, value, description, range, unit, step } =
+  const { name, displayName, type, value, description, range, unit, step, lineNumber } =
     parameter;
 
   // State for parameter info dialog (Phase 3 UX enhancement)
   const [showInfo, setShowInfo] = useState(false);
   const hasInfo = hasEnhancedInfo(name);
+
+  // Handle focus event - trigger line highlight in code preview
+  // 处理焦点事件 - 触发代码预览中的行高亮
+  const handleFocusEvent = useCallback(() => {
+    if (lineNumber && onFocus) {
+      onFocus(lineNumber);
+    }
+  }, [lineNumber, onFocus]);
+
+  // Handle blur event - clear line highlight
+  // 处理失焦事件 - 清除行高亮
+  const handleBlurEvent = useCallback(() => {
+    if (onFocus) {
+      onFocus(null);
+    }
+  }, [onFocus]);
 
   // Handle number input change
   const handleNumberChange = useCallback(
@@ -591,6 +617,8 @@ function ParameterInput({
               id={`param-${name}`}
               value={value as number}
               onChange={handleNumberChange}
+              onFocus={handleFocusEvent}
+              onBlur={handleBlurEvent}
               min={range?.min}
               max={range?.max}
               step={step ?? 1}
@@ -679,6 +707,8 @@ function ParameterInput({
           id={`param-${name}`}
           value={value as string}
           onChange={handleStringChange}
+          onFocus={handleFocusEvent}
+          onBlur={handleBlurEvent}
           disabled={readOnly}
           className={cn(
             "w-full px-3 py-2 bg-primary/50 border rounded text-sm text-white",

@@ -467,6 +467,382 @@ class LayeredCacheManager<T> {
    - 记录所有变更到 process.md
 
 
+## 2026-01-23 UI/UX 大改版部署 v19 | UI/UX Overhaul Deployment v19
+
+### 用户需求 User Requirements
+
+完成 UI/UX 大改版的所有阶段，提交 GitHub 并部署到 K3s 集群，移除旧版本，仅保留 v19 版本。
+
+Complete all phases of the UI/UX overhaul, commit to GitHub and deploy to K3s cluster, remove old versions and keep only v19.
+
+### 实施内容 Implementation
+
+#### Phase 1-5: 设计系统基础设施 | Design System Infrastructure
+- ✅ 创建 `docs/DESIGN_SYSTEM.md` - 完整的金融终端设计系统文档
+- ✅ 更新 `globals.css` - 新增 CSS 变量系统 (CN/US 市场模式切换)
+- ✅ 更新 `tailwind.config.ts` - 集成语义化颜色和工具类
+- ✅ VS Code 风格策略编辑器样式
+- ✅ 回测面板玻璃形态效果 (Glass Morphism)
+
+#### Phase 6: AI 投资顾问多空辩论样式 | AI Advisor Bull/Bear Debate Styles
+- 文件: `gushen-web/src/components/advisor/debate-view.tsx`
+- 更新 DebateProgress 组件使用 `text-profit`/`text-loss` 语义化颜色
+- 添加 `font-mono tabular-nums` 确保数字对齐
+- 使用渐变进度条 `from-profit via-accent to-loss`
+
+#### 构建错误修复 | Build Error Fix
+- 文件: `gushen-web/src/app/layout.tsx`
+- 移除 ErrorBoundary 的 `onError` 属性（Server Component 不能传递事件处理器到 Client Component）
+- ErrorBoundary 内部已处理日志记录
+
+### 部署过程 Deployment Process
+
+1. **Git 提交**: 8ca619f (UI overhaul), bd23d64 (build fix)
+2. **镜像构建**: 在 Worker 节点 (100.113.79.77) 本地构建 `gushen-web:v19`
+3. **镜像导入**: `docker save gushen-web:v19 | k3s ctr images import -`
+4. **滚动更新**: `kubectl set image deployment/ai-qtrd-web gushen-web=gushen-web:v19`
+5. **清理旧版本**: 设置 `revisionHistoryLimit=2` 保留最近 2 个 ReplicaSet
+
+### 部署结果 Deployment Results
+
+```
+Pod: ai-qtrd-web-7d89f85669-6g8k6
+Image: gushen-web:v19
+DNS: gushen.lurus.cn → 43.226.46.164
+HTTP: 200 OK, X-Nextjs-Cache: HIT
+```
+
+### 状态 Status
+
+✅ **部署完成 / Deployment Completed** - 2026-01-23
+
+---
+
+## 2026-01-23 Phase C: 券商API预留架构 | Broker API Architecture
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+
+### 用户需求 | User Requirements
+
+设计可扩展的券商接口抽象层，支持未来接入多种券商 API，当前先实现模拟交易功能。
+
+Design extensible broker API abstraction layer to support multiple broker API integrations, implementing mock trading first.
+
+### 接口设计 | Interface Design
+
+**`IBrokerAdapter`** - 券商适配器接口
+
+```typescript
+interface IBrokerAdapter {
+  // Connection
+  readonly brokerType: BrokerType;
+  readonly brokerName: string;
+  readonly supportedMarkets: MarketType[];
+  connect(credentials: BrokerCredentials): Promise<ConnectionResult>;
+  disconnect(): Promise<void>;
+  isConnected(): boolean;
+
+  // Account
+  getAccountInfo(): Promise<AccountInfo>;
+  getBalance(): Promise<BalanceInfo>;
+  getPositions(): Promise<Position[]>;
+
+  // Orders
+  placeOrder(order: OrderRequest): Promise<OrderResult>;
+  cancelOrder(orderId: string): Promise<CancelResult>;
+  getOrders(filter?: OrderFilter): Promise<Order[]>;
+  getOrder(orderId: string): Promise<Order | null>;
+
+  // Market Data (optional)
+  getQuote?(symbol: string): Promise<Quote>;
+  subscribe?(symbols: string[], callback: QuoteCallback): Subscription;
+
+  // Events
+  on<T>(event: BrokerEventType, listener: BrokerEventListener<T>): void;
+  off<T>(event: BrokerEventType, listener: BrokerEventListener<T>): void;
+}
+```
+
+### 支持的券商 | Supported Brokers
+
+| 券商 | 类型 | 状态 | 说明 |
+|-----|------|------|------|
+| Mock | mock | ✅ 可用 | 模拟交易（当前实现） |
+| 东方财富 | eastmoney | 🔜 即将 | A股交易，实时行情 |
+| 富途证券 | futu | 🔜 即将 | A股/港股/美股，期权 |
+| 老虎证券 | tiger | 🔜 即将 | 港股/美股，期权 |
+| Interactive Brokers | ib | 🔜 即将 | 全球市场，期货期权 |
+
+### 新增文件 | New Files
+
+1. **`gushen-web/src/lib/broker/interfaces.ts`** (~530行)
+   - 定义所有类型: `OrderSide`, `OrderType`, `OrderStatus`, `PositionSide`, `MarketType`, `BrokerType`
+   - 凭证接口: `BrokerCredentials`, `MockBrokerCredentials`
+   - 账户接口: `AccountInfo`, `BalanceInfo`, `Position`
+   - 订单接口: `OrderRequest`, `Order`, `OrderFilter`, `OrderResult`, `CancelResult`
+   - 行情接口: `Quote`, `QuoteCallback`, `Subscription`
+   - 事件系统: `BrokerEventType`, `BrokerEvent`, `BrokerEventListener`
+   - 主接口: `IBrokerAdapter`
+
+2. **`gushen-web/src/lib/broker/broker-factory.ts`** (~250行)
+   - `BROKER_REGISTRY` - 券商元数据注册表
+   - `BrokerInfo` 接口 - 券商信息定义
+   - `createBrokerAdapter()` - 创建券商实例
+   - `getBrokerInstance()` - 获取/创建单例实例
+   - `removeBrokerInstance()` - 移除实例
+   - `clearAllBrokerInstances()` - 清空所有实例
+   - `getAvailableBrokers()` - 获取可用券商
+   - `getAllBrokers()` - 获取所有券商
+   - `getBrokerInfo()` - 获取券商信息
+   - `isBrokerAvailable()` - 检查券商是否可用
+
+3. **`gushen-web/src/lib/broker/adapters/mock-broker.ts`** (~600行)
+   - 完整的模拟券商实现
+   - A股规则模拟：T+1、100股整数倍、10%涨跌停
+   - 费用模拟：佣金0.03%、印花税0.1%（卖出）、过户费0.001%
+   - 持仓管理：买入/卖出、平均成本计算
+   - 资金管理：冻结/解冻、可用资金计算
+   - 事件发射：`order_update`, `balance_update`, `position_update`
+   - 随机价格波动模拟
+
+4. **`gushen-web/src/hooks/use-broker.ts`** (~390行)
+   - `useBroker(brokerType, options)` - 主 Hook
+   - 自动连接支持 (`autoConnect`)
+   - 自动刷新支持 (`refreshInterval`)
+   - 返回值: broker, isConnected, isConnecting, error, account, balance, positions, orders
+   - 操作方法: connect, disconnect, refresh, placeOrder, cancelOrder, getQuote
+   - 事件监听自动绑定
+   - `useMockBroker()` - 便捷 Hook
+
+5. **`gushen-web/src/lib/broker/index.ts`** (~80行)
+   - 统一导出所有接口、类型和工厂函数
+   - 导出 MockBrokerAdapter 类
+
+### 技术特点 | Technical Features
+
+1. **单例模式** - 每种券商类型仅创建一个实例
+2. **事件驱动** - 订单/持仓/资金变化通过事件通知
+3. **A股规则** - 完整模拟中国A股交易规则
+4. **类型安全** - 完整 TypeScript 类型定义
+5. **React 集成** - 开箱即用的 useBroker Hook
+6. **可扩展性** - 新增券商只需实现 IBrokerAdapter 接口
+
+### Mock 券商功能 | Mock Broker Features
+
+- **初始资金**: 默认 500,000 元（可配置）
+- **模拟模式**: instant（即时成交）、delayed（延迟）、realistic（真实模拟）
+- **订单类型**: market（市价单）、limit（限价单）
+- **费用计算**: 佣金 0.03%（最低5元）、印花税 0.1%（卖出）、过户费 0.001%
+- **持仓限制**: T+1（当日买入不可卖出）
+- **数量限制**: 100股整数倍
+
+### 使用示例 | Usage Example
+
+```typescript
+// 使用 useBroker Hook
+const {
+  broker,
+  isConnected,
+  balance,
+  positions,
+  placeOrder
+} = useBroker('mock', { autoConnect: true });
+
+// 下单
+const result = await placeOrder({
+  symbol: '600519',
+  side: 'buy',
+  type: 'market',
+  quantity: 100
+});
+
+// 便捷 Hook
+const mockBroker = useMockBroker();
+```
+
+### 验证结果 | Verification
+
+- ✅ TypeScript 类型检查通过
+- ✅ Map 迭代兼容性修复（Array.from 转换）
+- ✅ 完整的接口定义
+- ✅ 模拟交易功能完整
+
+---
+
+## 2026-01-23 Phase B-2: 多租户历史记录存储 | Multi-Tenant History Storage
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+
+### 用户需求 | User Requirements
+
+实现多租户历史记录存储系统，支持用户/组织级别的策略、回测和交易历史存储。
+
+Implement multi-tenant history storage system supporting user/organization level strategy, backtest, and trading history.
+
+### 新增数据库表 | New Database Tables
+
+1. **`tenants`** - 租户/组织表
+   - id, name, slug, ownerId, plan, maxMembers, settings
+
+2. **`tenant_members`** - 租户成员关系表
+   - id, tenantId, userId, role, status, invitedBy
+
+3. **`strategy_history`** - 策略历史表
+   - id, userId, tenantId, strategyName, description, strategyCode, parameters
+   - strategyType, version, parentVersionId, tags, isActive, isStarred
+
+4. **`backtest_history`** - 回测历史表
+   - id, userId, tenantId, strategyHistoryId, symbol, stockName
+   - startDate, endDate, timeframe, config, result, dataSource
+   - dataCoverage, totalReturn, sharpeRatio, maxDrawdown, winRate
+
+5. **`trading_history`** - 交易历史表
+   - id, userId, tenantId, strategyHistoryId, symbol, stockName
+   - side, orderType, price, size, amount, commission, status
+   - realizedPnl, isPaperTrade, broker, externalOrderId
+
+### 新增文件 | New Files
+
+1. **`gushen-web/src/lib/services/history-service.ts`** (~450行)
+   - `checkTenantAccess()` - 租户访问权限检查
+   - `getUserTenants()` - 获取用户所属租户
+   - `createTenant()` / `getTenant()` / `getTenantBySlug()` - 租户CRUD
+   - `addTenantMember()` / `removeTenantMember()` - 成员管理
+   - `saveStrategyHistory()` / `getStrategyHistory()` / `getStrategyById()` - 策略历史
+   - `saveBacktestHistory()` / `getBacktestHistory()` / `getBacktestById()` - 回测历史
+   - `saveTradingHistory()` / `getTradingHistory()` / `getTradingStats()` - 交易历史
+   - 所有查询支持分页
+
+2. **`gushen-web/src/app/api/history/route.ts`** (~300行)
+   - `GET /api/history?type=strategy&userId=xxx&limit=50` - 获取历史记录
+   - `POST /api/history` - 保存历史记录
+   - `DELETE /api/history?type=strategy&id=123` - 删除历史记录
+   - 支持租户权限检查
+
+### 修改文件 | Modified Files
+
+1. **`gushen-web/src/lib/db/schema.ts`**
+   - 添加 5 个新表定义
+   - 添加索引优化查询性能
+   - 添加类型导出 (Tenant, TenantMember, StrategyHistory, BacktestHistory, TradingHistory)
+
+### API 设计 | API Design
+
+```
+GET  /api/history?type=strategy&userId=xxx&limit=50
+     ?type=backtest&userId=xxx&symbol=600519
+     ?type=trading&userId=xxx&page=2&limit=20
+
+POST /api/history
+     { type: 'strategy', data: { userId, strategyName, strategyCode, parameters } }
+     { type: 'backtest', data: { userId, symbol, startDate, endDate, config, result } }
+     { type: 'trading', data: { userId, symbol, side, price, size, amount } }
+
+DELETE /api/history?type=strategy&id=123&userId=xxx
+```
+
+### 角色权限 | Role Permissions
+
+- **owner**: 完全访问，可删除租户
+- **admin**: 管理成员，管理所有数据
+- **member**: 读写自己的数据
+- **viewer**: 只读访问
+
+### 验证结果 | Verification
+
+- ✅ TypeScript 类型检查通过
+- ✅ 数据库 schema 定义正确
+- ✅ API 端点设计完整
+- ✅ 权限检查逻辑正确
+
+---
+
+## 2026-01-23 Phase B-1: 数据库优先回测 | Database-First Backtest
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+
+### 用户需求 | User Requirements
+
+实现数据库优先的回测数据获取策略，优先使用 PostgreSQL 数据库中的 K 线数据进行回测，API 作为降级备选。
+
+Implement database-first backtest data fetching strategy, prioritizing PostgreSQL K-line data with API as fallback.
+
+### 数据获取优先级 | Data Priority
+
+1. **PostgreSQL 数据库** - kline_daily 表（仅支持日线）
+2. **EastMoney API** - 东方财富市场数据接口
+3. **Sina API** - 新浪财经数据（降级）
+4. **Mock Generator** - 模拟数据（仅演示）
+
+### 新增文件 | New Files
+
+1. **`gushen-web/src/lib/backtest/db-kline-provider.ts`** (~300行)
+   - `checkDataAvailability()` - 检查数据库中股票数据可用性
+   - `getKLineFromDatabase()` - 从数据库获取 K 线数据
+   - `getStockInfo()` - 获取股票信息
+   - `getLatestDataDate()` - 获取最新数据日期
+   - `getDataStatistics()` - 获取数据统计信息
+   - 支持股票代码标准化（600519.SH → 600519）
+   - 覆盖率计算（需 ≥85% 才使用数据库数据）
+
+### 修改文件 | Modified Files
+
+1. **`gushen-web/src/app/api/backtest/route.ts`**
+   - 导入 `getKLineFromDatabase`, `checkDataAvailability`
+   - 实现数据获取优先级逻辑：数据库 → API → Mock
+   - 增强 DataSourceInfo 接口添加 `dbCoverage`, `stockName` 字段
+   - 添加详细日志跟踪数据获取尝试
+
+2. **`gushen-web/src/components/strategy-editor/backtest-panel.tsx`**
+   - 添加 `DataSourceInfo` 接口定义
+   - 添加 `dataSourceInfo` state 存储 API 响应的数据源信息
+   - 将 `dataSourceInfo` 传递给 `BacktestBasisPanel` 组件
+
+3. **`gushen-web/src/components/strategy-editor/backtest-basis-panel.tsx`**
+   - 扩展 `EnhancedDataSourceInfo` 接口支持 `dbCoverage`, `stockName`
+   - 数据库数据源显示专用图标（数据库图标 vs 勾选图标）
+   - 显示数据库覆盖率徽章
+   - 覆盖率颜色编码：≥95% 绿色，≥85% 黄色，<85% 橙色
+   - 显示股票名称
+
+4. **`gushen-web/src/components/strategy-editor/code-preview.tsx`**
+   - 修复三元运算符语法错误（添加缺失的 `: null`）
+
+### UI 增强 | UI Enhancements
+
+**数据库数据成功获取时显示：**
+```
+┌──────────────────────────────────────────────────┐
+│ 🗄️  数据库真实数据               [覆盖率 97.2%] │
+│ 已获取 247 条真实K线数据 (来源: PostgreSQL数据库)│
+│                                     | 贵州茅台  │
+└──────────────────────────────────────────────────┘
+```
+
+**API 降级时显示：**
+```
+┌──────────────────────────────────────────────────┐
+│ ✓  真实历史数据回测                              │
+│ 已获取 365 条真实K线数据 (来源: eastmoney)       │
+└──────────────────────────────────────────────────┘
+```
+
+### 技术细节 | Technical Details
+
+- **最低覆盖率**: 85%（低于此值将降级到 API）
+- **时间周期限制**: 数据库仅支持日线(1d)，其他周期自动降级到 API
+- **股票代码标准化**: 支持多种格式 (600519.SH, sh600519, 600519)
+- **数据转换**: 日期字符串 → Unix 时间戳（秒）
+
+### 验证结果 | Verification
+
+- ✅ TypeScript 类型检查通过
+- ✅ 数据库查询逻辑正确
+- ✅ 降级逻辑正确处理
+- ✅ UI 正确显示数据源信息
+
+---
+
 ## 2026-01-22 GuShen 平台全面修复与增强 | Comprehensive Fix & Enhancement
 
 ### 用户需求 User Requirements

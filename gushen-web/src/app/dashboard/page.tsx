@@ -48,6 +48,9 @@ export default function DashboardPage() {
   // 本地错误状态（不持久化）
   const [error, setError] = useState<string | null>(null);
 
+  // Code-parameter linkage state / 代码-参数联动状态
+  const [focusedLine, setFocusedLine] = useState<number | null>(null);
+
   // Calculate current workflow step (Phase 4 UX enhancement)
   // 计算当前工作流步骤（Phase 4用户体验增强）
   const currentWorkflowStep = useMemo(() => {
@@ -386,6 +389,7 @@ export default function DashboardPage() {
                 onCodeUpdate={handleCodeUpdate}
                 onRerunBacktest={handleRerunBacktest}
                 isBacktesting={isBacktesting}
+                onParameterFocus={setFocusedLine}
               />
             )}
 
@@ -393,9 +397,15 @@ export default function DashboardPage() {
             <DraftHistoryPanel />
           </div>
 
-          {/* Middle column - Code preview */}
+          {/* Middle column - Code preview with collapse and line highlight */}
           <div>
-            <CodePreview code={generatedCode} isLoading={isGenerating} />
+            <CodePreview
+              code={generatedCode}
+              isLoading={isGenerating}
+              collapsible={true}
+              highlightedLine={focusedLine}
+              onHighlightClear={() => setFocusedLine(null)}
+            />
           </div>
 
           {/* Right column - Backtest + AI Assistant */}
