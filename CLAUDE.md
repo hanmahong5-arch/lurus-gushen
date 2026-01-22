@@ -20,3 +20,5 @@ bun run lint                        # All files | 所有文件
 # 5. Before creating PR | 创建 PR 之前
 bun run lint:claude && bun run test
 ```
+
+如果需要在k3s集群上操作，查看C:\Users\Administrator\Desktop\lurus\gushen\README.md
