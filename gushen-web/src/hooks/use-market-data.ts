@@ -18,6 +18,11 @@ import type {
   KLineTimeFrame,
   ServiceStats,
   ServiceHealth,
+  DragonTigerEntry,
+  SectorCapitalFlow,
+  MarginTradingData,
+  LargeOrderFlow,
+  MarketSentiment,
 } from "@/lib/data-service/types";
 
 // =============================================================================
@@ -576,6 +581,331 @@ export function useBatchQuotes(
 
     setLoading(false);
   }, [symbolsKey, enabled]);
+
+  useEffect(() => {
+    fetchData();
+
+    if (refreshInterval > 0 && enabled) {
+      intervalRef.current = setInterval(fetchData, refreshInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, refreshInterval, enabled]);
+
+  return {
+    data,
+    loading,
+    error,
+    refresh: fetchData,
+    lastUpdate,
+    source,
+    cached,
+  };
+}
+
+// =============================================================================
+// INSTITUTIONAL DATA HOOKS / 机构数据 Hooks
+// =============================================================================
+
+/**
+ * Hook for fetching Dragon Tiger List
+ * 获取龙虎榜数据的 Hook
+ */
+export function useDragonTigerList(
+  options: UseMarketDataOptions & { days?: number; limit?: number } = {},
+): UseMarketDataResult<DragonTigerEntry[]> {
+  const { refreshInterval = 60000, enabled = true, days = 5, limit = 50 } = options;
+  const [data, setData] = useState<DragonTigerEntry[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [cached, setCached] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchApi<DragonTigerEntry[]>(
+      `/api/data/institutional?type=dragon-tiger&days=${days}&limit=${limit}`,
+    );
+
+    if (result.success && result.data) {
+      setData(result.data);
+      setSource(result.source ?? null);
+      setCached(result.cached ?? false);
+      setLastUpdate(Date.now());
+    } else {
+      setError(result.error ?? "Failed to fetch dragon tiger list");
+    }
+
+    setLoading(false);
+  }, [enabled, days, limit]);
+
+  useEffect(() => {
+    fetchData();
+
+    if (refreshInterval > 0 && enabled) {
+      intervalRef.current = setInterval(fetchData, refreshInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, refreshInterval, enabled]);
+
+  return {
+    data,
+    loading,
+    error,
+    refresh: fetchData,
+    lastUpdate,
+    source,
+    cached,
+  };
+}
+
+/**
+ * Hook for fetching Sector Capital Flow
+ * 获取板块资金流向的 Hook
+ */
+export function useSectorCapitalFlow(
+  options: UseMarketDataOptions & {
+    sectorType?: "industry" | "concept" | "region";
+    limit?: number;
+  } = {},
+): UseMarketDataResult<SectorCapitalFlow[]> {
+  const { refreshInterval = 30000, enabled = true, sectorType = "industry", limit = 20 } = options;
+  const [data, setData] = useState<SectorCapitalFlow[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [cached, setCached] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchApi<SectorCapitalFlow[]>(
+      `/api/data/institutional?type=sector-flow&sectorType=${sectorType}&limit=${limit}`,
+    );
+
+    if (result.success && result.data) {
+      setData(result.data);
+      setSource(result.source ?? null);
+      setCached(result.cached ?? false);
+      setLastUpdate(Date.now());
+    } else {
+      setError(result.error ?? "Failed to fetch sector capital flow");
+    }
+
+    setLoading(false);
+  }, [enabled, sectorType, limit]);
+
+  useEffect(() => {
+    fetchData();
+
+    if (refreshInterval > 0 && enabled) {
+      intervalRef.current = setInterval(fetchData, refreshInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, refreshInterval, enabled]);
+
+  return {
+    data,
+    loading,
+    error,
+    refresh: fetchData,
+    lastUpdate,
+    source,
+    cached,
+  };
+}
+
+/**
+ * Hook for fetching Margin Trading Data
+ * 获取融资融券数据的 Hook
+ */
+export function useMarginTradingData(
+  options: UseMarketDataOptions & { days?: number } = {},
+): UseMarketDataResult<MarginTradingData[]> {
+  const { refreshInterval = 300000, enabled = true, days = 30 } = options; // 5 min refresh
+  const [data, setData] = useState<MarginTradingData[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [cached, setCached] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchApi<MarginTradingData[]>(
+      `/api/data/institutional?type=margin&days=${days}`,
+    );
+
+    if (result.success && result.data) {
+      setData(result.data);
+      setSource(result.source ?? null);
+      setCached(result.cached ?? false);
+      setLastUpdate(Date.now());
+    } else {
+      setError(result.error ?? "Failed to fetch margin trading data");
+    }
+
+    setLoading(false);
+  }, [enabled, days]);
+
+  useEffect(() => {
+    fetchData();
+
+    if (refreshInterval > 0 && enabled) {
+      intervalRef.current = setInterval(fetchData, refreshInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, refreshInterval, enabled]);
+
+  return {
+    data,
+    loading,
+    error,
+    refresh: fetchData,
+    lastUpdate,
+    source,
+    cached,
+  };
+}
+
+/**
+ * Hook for fetching Large Order Flow
+ * 获取大单流向的 Hook
+ */
+export function useLargeOrderFlow(
+  options: UseMarketDataOptions & {
+    limit?: number;
+    sortBy?: "main" | "super" | "large";
+  } = {},
+): UseMarketDataResult<LargeOrderFlow[]> {
+  const { refreshInterval = 30000, enabled = true, limit = 50, sortBy = "main" } = options;
+  const [data, setData] = useState<LargeOrderFlow[] | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [cached, setCached] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchApi<LargeOrderFlow[]>(
+      `/api/data/institutional?type=large-orders&limit=${limit}&sortBy=${sortBy}`,
+    );
+
+    if (result.success && result.data) {
+      setData(result.data);
+      setSource(result.source ?? null);
+      setCached(result.cached ?? false);
+      setLastUpdate(Date.now());
+    } else {
+      setError(result.error ?? "Failed to fetch large order flow");
+    }
+
+    setLoading(false);
+  }, [enabled, limit, sortBy]);
+
+  useEffect(() => {
+    fetchData();
+
+    if (refreshInterval > 0 && enabled) {
+      intervalRef.current = setInterval(fetchData, refreshInterval);
+    }
+
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+      }
+    };
+  }, [fetchData, refreshInterval, enabled]);
+
+  return {
+    data,
+    loading,
+    error,
+    refresh: fetchData,
+    lastUpdate,
+    source,
+    cached,
+  };
+}
+
+/**
+ * Hook for fetching Market Sentiment
+ * 获取市场情绪的 Hook
+ */
+export function useMarketSentiment(
+  options: UseMarketDataOptions = {},
+): UseMarketDataResult<MarketSentiment> {
+  const { refreshInterval = 60000, enabled = true } = options;
+  const [data, setData] = useState<MarketSentiment | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [lastUpdate, setLastUpdate] = useState<number | null>(null);
+  const [source, setSource] = useState<string | null>(null);
+  const [cached, setCached] = useState(false);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!enabled) return;
+
+    setLoading(true);
+    setError(null);
+
+    const result = await fetchApi<MarketSentiment>(
+      `/api/data/institutional?type=sentiment`,
+    );
+
+    if (result.success && result.data) {
+      setData(result.data);
+      setSource(result.source ?? null);
+      setCached(result.cached ?? false);
+      setLastUpdate(Date.now());
+    } else {
+      setError(result.error ?? "Failed to fetch market sentiment");
+    }
+
+    setLoading(false);
+  }, [enabled]);
 
   useEffect(() => {
     fetchData();

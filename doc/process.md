@@ -5,6 +5,177 @@ This document tracks all development progress, feature modifications, and bug fi
 
 ---
 
+## 2026-01-23 数据采集专项实施 | Data Collection Implementation
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+**Priority | 优先级**: P0 (紧急)
+
+### 用户需求 | User Requirements
+
+实现数据采集专项计划，包括：
+1. 创建K线数据持久化模块（kline-persister）
+2. 修改回测API自动持久化API获取的数据
+3. 创建按需数据采集API
+4. 实现股票列表和K线数据导入脚本
+
+Implement data collection plan including:
+1. Create K-line data persistence module (kline-persister)
+2. Modify backtest API to auto-persist data fetched from API
+3. Create on-demand data fetch API
+4. Implement stock list and K-line data import scripts
+
+### 新增文件 | New Files
+
+#### 1. K线数据持久化模块 | K-Line Persister
+**File | 文件**: `gushen-web/src/lib/backtest/kline-persister.ts` (新建 ~350行)
+
+**功能 | Features**:
+- `findOrCreateStock()` - 查找或创建股票记录
+- `persistKLinesToDatabase()` - 批量upsert K线数据到数据库
+- `persistKLinesAsync()` - 异步非阻塞持久化（发后即忘）
+- `hasKLineData()` - 检查K线数据是否存在
+- `getKLineCount()` - 获取K线记录数
+- 支持符号标准化（600519.SH → 600519）
+- 支持交易所推断（6开头=SH，0/3开头=SZ）
+- 批量处理（BATCH_SIZE=100）
+- 重试机制（MAX_RETRIES=3）
+
+#### 2. 按需数据采集API | On-Demand Data Fetch API
+**File | 文件**: `gushen-web/src/app/api/data/fetch/route.ts` (新建 ~320行)
+
+**API端点 | Endpoints**:
+- `POST /api/data/fetch` - 获取并持久化K线数据
+- `GET /api/data/fetch?symbol=xxx` - 查询数据状态
+
+**请求参数 | Request Parameters**:
+```json
+{
+  "symbol": "600519",
+  "startDate": "2025-01-01",
+  "endDate": "2026-01-23",
+  "forceRefresh": false,
+  "timeframe": "1d"
+}
+```
+
+**响应示例 | Response Example**:
+```json
+{
+  "success": true,
+  "data": {
+    "symbol": "600519",
+    "source": "api",
+    "recordCount": 245,
+    "coverage": 0.972,
+    "dateRange": { "earliest": "2025-01-02", "latest": "2026-01-23" },
+    "persisted": true,
+    "persistedCount": 245,
+    "stockName": "贵州茅台",
+    "processingTime": 1234
+  },
+  "message": "Fetched 245 records from API and persisted 245 to database"
+}
+```
+
+#### 3. 数据导入脚本 | Data Import Script
+**File | 文件**: `gushen-web/scripts/import-initial-data.ts` (重写 ~585行)
+
+**功能 | Features**:
+- 从东方财富API获取A股股票列表
+- 支持上海(SH)、深圳(SZ)、北京(BJ)交易所
+- 批量导入K线历史数据
+- 支持命令行参数配置
+
+**使用方法 | Usage**:
+```bash
+bun run db:import                        # 导入所有（股票+K线）
+bun run db:import:stocks                 # 仅导入股票列表
+bun run db:import:klines                 # 仅导入K线数据
+bun tsx scripts/import-initial-data.ts --symbols=600519,000001 --days=365
+bun tsx scripts/import-initial-data.ts --limit=100 --exchange=SH
+```
+
+### 修改文件 | Modified Files
+
+#### 1. 回测API自动持久化 | Backtest API Auto-Persist
+**File | 文件**: `gushen-web/src/app/api/backtest/route.ts`
+
+**变更 | Changes**:
+- ✅ 导入 `persistKLinesAsync` 模块
+- ✅ 添加 `persistedAsync` 字段到 DataSourceInfo 接口
+- ✅ 当从API获取日线数据时，自动触发异步持久化
+- ✅ 在响应中返回 `persistedAsync` 状态
+
+**代码示例 | Code Snippet**:
+```typescript
+// Auto-persist to database for future use (async, non-blocking)
+if (config.timeframe === "1d" && klineResult.data.length > 0) {
+  console.log(`[Backtest] Triggering async persist for ${config.symbol}...`);
+  persistKLinesAsync(config.symbol, klineResult.data, {
+    stockName: undefined,
+  });
+  dataSourceInfo.persistedAsync = true;
+}
+```
+
+### 数据流程图 | Data Flow Diagram
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        用户发起回测                              │
+│  POST /api/backtest { symbol: "600519", startDate, endDate }   │
+└─────────────────────────────────────────────────────────────────┘
+                              ↓
+┌─────────────────────────────────────────────────────────────────┐
+│                   1️⃣ 检查PostgreSQL数据库                        │
+│  getKLineFromDatabase() → checkDataAvailability()              │
+│  覆盖率计算: actualDays / expectedTradingDays                   │
+└─────────────────────────────────────────────────────────────────┘
+         ↓ 覆盖率 < 85%                    ↓ 覆盖率 ≥ 85%
+┌────────────────────────────┐   ┌────────────────────────────────┐
+│   2️⃣ 从EastMoney API获取   │   │   ✅ 直接使用数据库数据         │
+│  getKLineData(symbol, ...)  │   │   source: 'postgresql-database'│
+└────────────────────────────┘   └────────────────────────────────┘
+         ↓ 获取成功
+┌────────────────────────────────────────────────────────────────┐
+│                3️⃣ 异步持久化到数据库 (新增逻辑)                  │
+│  persistKLinesAsync(symbol, klines)                            │
+│  - findOrCreateStock(symbol) → stockId                         │
+│  - batchUpsert(klineDaily, data)                              │
+│  - ON CONFLICT (stockId, date) DO UPDATE                       │
+└────────────────────────────────────────────────────────────────┘
+         ↓
+┌────────────────────────────────────────────────────────────────┐
+│                    4️⃣ 返回回测结果                              │
+│  dataSource: { type: 'real', provider: 'eastmoney-api',        │
+│               persistedAsync: true }                           │
+└────────────────────────────────────────────────────────────────┘
+```
+
+### 验证结果 | Verification
+
+```bash
+$ bun run typecheck
+# ✅ 无错误，类型检查通过
+```
+
+### 代码统计 | Code Statistics
+
+- **新增文件数**: 2个
+- **重写文件数**: 1个
+- **修改文件数**: 1个
+- **新增代码行数**: ~1,250行
+- **修改代码行数**: ~30行
+
+### 关键文件 | Critical Files
+
+1. `gushen-web/src/lib/backtest/kline-persister.ts` - K线数据持久化
+2. `gushen-web/src/app/api/data/fetch/route.ts` - 按需数据采集API
+3. `gushen-web/src/app/api/backtest/route.ts` - 回测API（添加自动持久化）
+4. `gushen-web/scripts/import-initial-data.ts` - 数据导入脚本
+
+---
+
 ## 2026-01-23 Phase 4 构建修复 | Phase 4 Build Fix
 **Date | 日期**: 2026-01-23
 **Status | 状态**: ✅ Completed | 已完成
@@ -1259,5 +1430,124 @@ Implement database-first backtest data fetching strategy, prioritizing PostgreSQ
 - TypeScript typecheck 通过
 - ESLint 检查通过
 - 待部署验证
+
+---
+
+## 2026-01-23 导航头部统一与机构洞察页面 | Header Unification & Institutional Insights
+
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+**Priority | 优先级**: P1
+
+### 用户需求 | User Requirements
+
+1. 首页和仪表板页面的导航头部风格不一致，需要统一
+2. 投资顾问页面使用自定义内联头部，缺少用户状态显示
+3. 需要添加机构投资者关注的专业指标标签
+
+Issues:
+1. Homepage and dashboard navigation headers have inconsistent styling
+2. Advisor page uses custom inline header without user status display
+3. Need to add professional indicator tabs for institutional investors
+
+### 解决方案 | Solutions
+
+#### 1. 投资顾问页面头部统一 | Advisor Page Header Unification
+**File | 文件**: `gushen-web/src/app/dashboard/advisor/page.tsx`
+
+**变更 | Changes**:
+- 移除自定义内联头部（包含"谷神"文字logo和简化导航）
+- 使用统一的 `<DashboardHeader />` 组件
+- 更新 `FrameworkOverview` 组件使用设计系统 tokens
+- 将 "Powered by DeepSeek + 三道六术" 信息移至框架概览区域
+
+**代码示例 | Code Snippet**:
+```typescript
+// Before | 之前
+<header className="border-b border-[#1a1f36]">
+  <Link href="/dashboard" className="text-xl font-bold text-[#f5a623]">
+    谷神
+  </Link>
+  // ... custom nav and "Powered by" text
+</header>
+
+// After | 之后
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
+<DashboardHeader />
+```
+
+#### 2. 首页头部风格统一 | Homepage Header Style Unification
+**File | 文件**: `gushen-web/src/components/landing/header.tsx`
+
+**变更 | Changes**:
+- Logo 尺寸调整为与仪表板一致（w-7 h-7, h-14 高度）
+- 导航标签改为中文（去除双语）
+- 用户下拉菜单样式与仪表板一致
+- 添加角色徽章显示（免费版/标准版/专业版）
+- 使用设计系统 tokens（bg-surface, border-border, text-accent等）
+
+**代码示例 | Code Snippet**:
+```typescript
+// Role badge display | 角色徽章显示
+<span className={`text-xs ${roleInfo.color}`}>
+  {roleInfo.label}
+</span>
+```
+
+#### 3. 新增机构洞察页面 | New Institutional Insights Page
+**File | 文件**: `gushen-web/src/app/dashboard/insights/page.tsx` (新建 ~500行)
+
+**功能 | Features**:
+- 北向资金实时监控（沪股通/深股通）
+- 主力资金净流入统计
+- 融资融券余额展示
+- 市场情绪指数
+- 龙虎榜数据（上榜原因、买入/卖出金额）
+- 板块轮动分析（涨跌幅、成交额、领涨股）
+- 大单流向（超大单/大单/中单/小单）
+- 关键市场指标（成交额、换手率、涨跌停统计）
+
+**导航标签更新 | Navigation Tab Update**:
+```typescript
+// 文件: gushen-web/src/components/dashboard/dashboard-header.tsx
+const NAV_ITEMS = [
+  { href: '/dashboard', label: '策略编辑器', labelEn: 'Strategy Editor' },
+  { href: '/dashboard/strategy-validation', label: '策略验证', labelEn: 'Validation' },
+  { href: '/dashboard/trading', label: '交易面板', labelEn: 'Trading' },
+  { href: '/dashboard/insights', label: '机构洞察', labelEn: 'Insights' },  // 新增
+  { href: '/dashboard/advisor', label: '投资顾问', labelEn: 'Advisor' },
+  { href: '/dashboard/history', label: '历史记录', labelEn: 'History' },
+];
+```
+
+### 修改文件列表 | Modified Files
+
+| 文件路径 | 操作 | 描述 |
+|---------|------|------|
+| `src/app/dashboard/advisor/page.tsx` | 修改 | 替换内联头部为DashboardHeader |
+| `src/components/landing/header.tsx` | 修改 | 统一风格，添加角色徽章 |
+| `src/components/dashboard/dashboard-header.tsx` | 修改 | 添加机构洞察导航标签 |
+| `src/app/dashboard/insights/page.tsx` | 新建 | 机构洞察页面 |
+
+### 验证结果 | Verification
+
+```bash
+$ bun run typecheck
+# ✅ 无错误，类型检查通过
+```
+
+### UI效果 | UI Result
+
+**统一后的效果**:
+- 首页和仪表板使用相同的 "G GuShen." logo 样式
+- 统一的导航标签布局（6个标签）
+- 一致的用户状态显示（角色徽章+头像）
+- 一致的下拉菜单样式
+
+**机构洞察页面亮点**:
+- 4个顶部概览卡片（北向资金、主力资金、融资融券、市场情绪）
+- 4个数据标签页（资金流向、龙虎榜、板块轮动、大单流向）
+- 右侧快速指标面板（主要指数、关键指标）
+- 专业的财务数据格式（tabular-nums, font-mono）
 
 ---

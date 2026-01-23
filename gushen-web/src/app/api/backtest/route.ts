@@ -40,6 +40,7 @@ import {
 } from "@/lib/backtest/engine";
 import { getKLineData } from "@/lib/data-service";
 import { getKLineFromDatabase, checkDataAvailability } from "@/lib/backtest/db-kline-provider";
+import { persistKLinesAsync } from "@/lib/backtest/kline-persister";
 
 // Data source tracking interface
 interface DataSourceInfo {
@@ -53,6 +54,8 @@ interface DataSourceInfo {
   dbCoverage?: number;
   /** Stock name from database / 数据库中的股票名称 */
   stockName?: string;
+  /** Whether data is being persisted to database / 是否正在持久化到数据库 */
+  persistedAsync?: boolean;
 }
 
 export async function POST(request: NextRequest) {
@@ -214,6 +217,18 @@ export async function POST(request: NextRequest) {
             };
 
             console.log(`[Backtest] API fetch successful: ${klines.length} bars from ${klineResult.source}`);
+
+            // ================================================================
+            // Auto-persist to database for future use (async, non-blocking)
+            // 自动持久化到数据库供后续使用（异步，非阻塞）
+            // ================================================================
+            if (config.timeframe === "1d" && klineResult.data.length > 0) {
+              console.log(`[Backtest] Triggering async persist for ${config.symbol}...`);
+              persistKLinesAsync(config.symbol, klineResult.data, {
+                stockName: undefined, // Will be fetched/created by persister
+              });
+              dataSourceInfo.persistedAsync = true;
+            }
           } else {
             dataFetchAttempts.push(`API: ${klineResult.error || 'No data returned'}`);
             console.log(`[Backtest] API fetch failed: ${klineResult.error}`);
@@ -302,6 +317,8 @@ export async function POST(request: NextRequest) {
             // Database-specific fields
             dbCoverage: dataSourceInfo.dbCoverage,
             stockName: dataSourceInfo.stockName,
+            // Auto-persist status
+            persistedAsync: dataSourceInfo.persistedAsync || false,
           },
           // Legacy field for backward compatibility
           dataSourceLegacy: dataSourceInfo.type === "real" ? "real" : "simulated",

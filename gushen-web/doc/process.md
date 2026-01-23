@@ -2425,3 +2425,109 @@ URL: http://43.226.46.164:3000/dashboard
 - 待集成测试
 
 ---
+
+## 2026-01-23: 机构数据 API 与 Insights 页面实时数据对接
+## Institutional Data API & Insights Page Real-time Data Integration
+
+**用户需求 User Request:**
+- 检查 Insights 页面新增功能是否有真实数据来源
+- 如果没有，对接后端 EastMoney API
+
+**方法 Method:**
+
+### Phase 1: 数据类型定义
+
+**修改 src/lib/data-service/types.ts:**
+- 新增 `DragonTigerEntry` 接口 - 龙虎榜条目
+- 新增 `SectorCapitalFlow` 接口 - 板块资金流向
+- 新增 `MarginTradingData` 接口 - 融资融券数据
+- 新增 `LargeOrderFlow` 接口 - 大单流向
+- 新增 `MarketSentiment` 接口 - 市场情绪指标
+
+### Phase 2: EastMoney 机构数据 API 实现
+
+**创建 src/lib/data-service/sources/eastmoney-institutional.ts (~600行):**
+- `getDragonTigerList(days, pageSize)` - 龙虎榜数据
+  - 使用 datacenter-web API `RPT_ORGANIZATION_TRADE_DETAILS`
+  - 支持天数和分页参数
+- `getSectorCapitalFlow(sectorType, limit)` - 板块资金流向
+  - 使用 push2 API，支持 industry/concept/region 类型
+  - 实时主力资金净流入数据
+- `getMarginTradingData(days)` - 融资融券数据
+  - 使用 datacenter-web API `RPTA_RZRQ_LSHJ`
+  - 包含融资余额、融券余额、净买入
+- `getLargeOrderFlow(limit, sortBy)` - 大单流向
+  - 使用 push2 API 按资金流向排序
+  - 支持按主力/超大单/大单排序
+- `getMarketSentiment()` - 市场情绪
+  - 聚合全市场涨跌停、涨跌比统计
+  - 计算情绪分数 (0-100)
+
+### Phase 3: API 路由创建
+
+**创建 src/app/api/data/institutional/route.ts:**
+- GET `/api/data/institutional?type=dragon-tiger|sector-flow|margin|large-orders|sentiment`
+- 统一路由处理 5 种机构数据类型
+- 支持 limit, days, sectorType, sortBy 查询参数
+- 返回统一响应格式 (success, data, source, cached, latency)
+
+### Phase 4: React Hooks 封装
+
+**修改 src/hooks/use-market-data.ts:**
+- `useDragonTigerList(options)` - 龙虎榜 hook
+- `useSectorCapitalFlow(options)` - 板块资金流向 hook
+- `useMarginTradingData(options)` - 融资融券 hook
+- `useLargeOrderFlow(options)` - 大单流向 hook
+- `useMarketSentiment(options)` - 市场情绪 hook
+- 所有 hook 支持 refreshInterval、自动刷新
+
+### Phase 5: Insights 页面真实数据对接
+
+**修改 src/app/dashboard/insights/page.tsx (~677行):**
+- 移除所有 Mock 数据 (MOCK_SECTORS, MOCK_DRAGON_TIGER, MOCK_LARGE_ORDERS)
+- 集成真实数据 hooks:
+  - 龙虎榜: 5分钟刷新，显示最近5天上榜记录
+  - 板块资金流向: 盘中30秒刷新，盘后2分钟刷新
+  - 融资融券: 10分钟刷新，显示最近7天数据
+  - 大单流向: 盘中30秒刷新
+  - 市场情绪: 盘中1分钟刷新
+- 更新数据来源信息框，显示实时数据来源
+
+**实现结果 Result:**
+
+**新建文件 New Files:**
+- `src/lib/data-service/sources/eastmoney-institutional.ts` - 机构数据API实现 (~600行)
+- `src/app/api/data/institutional/route.ts` - 机构数据路由 (~95行)
+
+**修改文件 Modified Files:**
+- `src/lib/data-service/types.ts` - 新增5个机构数据接口
+- `src/hooks/use-market-data.ts` - 新增5个数据hooks
+- `src/app/dashboard/insights/page.tsx` - 移除Mock数据，使用真实API
+
+**功能清单 Features:**
+1. ✅ 龙虎榜 (Dragon Tiger List) 真实数据
+2. ✅ 板块资金流向 (Sector Capital Flow) 真实数据
+3. ✅ 融资融券 (Margin Trading) 真实数据
+4. ✅ 大单流向 (Large Order Flow) 真实数据
+5. ✅ 市场情绪 (Market Sentiment) 真实数据
+6. ✅ 自动刷新机制，盘中高频/盘后低频
+7. ✅ 统一数据响应格式
+
+**API 端点 API Endpoints:**
+- `GET /api/data/institutional?type=dragon-tiger` - 龙虎榜
+- `GET /api/data/institutional?type=sector-flow` - 板块资金流向
+- `GET /api/data/institutional?type=margin` - 融资融券
+- `GET /api/data/institutional?type=large-orders` - 大单流向
+- `GET /api/data/institutional?type=sentiment` - 市场情绪
+
+**验证 Verification:**
+- ✅ TypeScript typecheck 通过
+- ✅ 5个机构数据API均可正常调用
+
+### 状态 Status
+
+✅ **机构数据API开发完成 / Institutional Data API Development Completed**
+- 完成时间: 2026-01-23
+- 所有5种机构数据均使用真实 EastMoney API
+
+---

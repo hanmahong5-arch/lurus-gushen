@@ -39,11 +39,14 @@ import { Button } from '@/components/ui/button';
 
 // Navigation items for dashboard tabs
 // 仪表板标签的导航项
+// Professional-grade tabs for institutional investors
+// 面向机构投资者的专业级标签
 const NAV_ITEMS = [
   { href: '/dashboard', label: '策略编辑器', labelEn: 'Strategy Editor' },
   { href: '/dashboard/strategy-validation', label: '策略验证', labelEn: 'Validation' },
-  { href: '/dashboard/advisor', label: '投资顾问', labelEn: 'Advisor' },
   { href: '/dashboard/trading', label: '交易面板', labelEn: 'Trading' },
+  { href: '/dashboard/insights', label: '机构洞察', labelEn: 'Insights' },
+  { href: '/dashboard/advisor', label: '投资顾问', labelEn: 'Advisor' },
   { href: '/dashboard/history', label: '历史记录', labelEn: 'History' },
 ];
 

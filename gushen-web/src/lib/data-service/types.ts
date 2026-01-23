@@ -310,3 +310,104 @@ export interface MarketInfo {
   isHoliday: boolean;       // Is holiday / 是否假日
   nextTradingDay: string;   // Next trading day / 下一交易日
 }
+
+// =============================================================================
+// INSTITUTIONAL DATA TYPES / 机构数据类型
+// =============================================================================
+
+/**
+ * Dragon Tiger List (龙虎榜) entry
+ * 龙虎榜条目
+ */
+export interface DragonTigerEntry {
+  symbol: string;           // Stock code / 股票代码
+  name: string;             // Stock name / 股票名称
+  tradeDate: string;        // Trade date / 交易日期
+  closePrice: number;       // Close price / 收盘价
+  changePercent: number;    // Change percent / 涨跌幅
+  turnoverRate: number;     // Turnover rate / 换手率
+  netBuyAmount: number;     // Net buy amount / 净买入额
+  buyAmount: number;        // Total buy amount / 买入总额
+  sellAmount: number;       // Total sell amount / 卖出总额
+  reason: string;           // Reason for list / 上榜原因
+  buyInstitutions: number;  // Buy institution count / 买入机构数
+  sellInstitutions: number; // Sell institution count / 卖出机构数
+  timestamp: number;        // Unix timestamp / 时间戳
+}
+
+/**
+ * Sector capital flow data
+ * 板块资金流向数据
+ */
+export interface SectorCapitalFlow {
+  sectorCode: string;       // Sector code / 板块代码
+  sectorName: string;       // Sector name / 板块名称
+  sectorType: "industry" | "concept" | "region"; // 行业/概念/地域
+  mainNetInflow: number;    // Main force net inflow / 主力净流入
+  mainNetInflowPercent: number; // Main net inflow percent / 主力净流入占比
+  superLargeInflow: number; // Super large order inflow / 超大单净流入
+  largeInflow: number;      // Large order inflow / 大单净流入
+  mediumInflow: number;     // Medium order inflow / 中单净流入
+  smallInflow: number;      // Small order inflow / 小单净流入
+  changePercent: number;    // Sector change percent / 板块涨跌幅
+  leadingStock: string;     // Leading stock name / 领涨股
+  leadingStockChange: number; // Leading stock change / 领涨股涨幅
+  stockCount: number;       // Stock count in sector / 成份股数量
+  timestamp: number;        // Unix timestamp / 时间戳
+}
+
+/**
+ * Margin trading (融资融券) data
+ * 融资融券数据
+ */
+export interface MarginTradingData {
+  tradeDate: string;        // Trade date / 交易日期
+  market: "sh" | "sz" | "total"; // Market / 市场
+  marginBalance: number;    // Margin balance / 融资余额
+  marginBuy: number;        // Margin buy amount / 融资买入额
+  marginRepay: number;      // Margin repay amount / 融资偿还额
+  shortBalance: number;     // Short balance / 融券余额
+  shortBalanceAmount: number; // Short balance in CNY / 融券余额金额
+  shortSell: number;        // Short sell volume / 融券卖出量
+  shortRepay: number;       // Short repay volume / 融券偿还量
+  totalBalance: number;     // Total balance / 融资融券余额
+  netBuy: number;           // Net margin buy / 融资净买入
+  timestamp: number;        // Unix timestamp / 时间戳
+}
+
+/**
+ * Large order flow summary
+ * 大单流向汇总
+ */
+export interface LargeOrderFlow {
+  symbol: string;           // Stock code / 股票代码
+  name: string;             // Stock name / 股票名称
+  price: number;            // Current price / 现价
+  changePercent: number;    // Change percent / 涨跌幅
+  mainNetInflow: number;    // Main net inflow / 主力净流入
+  mainNetInflowPercent: number; // Main net inflow ratio / 主力净流入占比
+  superLargeNetInflow: number; // Super large net inflow / 超大单净流入
+  largeNetInflow: number;   // Large net inflow / 大单净流入
+  orderType: "buy" | "sell"; // Dominant order type / 主导方向
+  timestamp: number;        // Unix timestamp / 时间戳
+}
+
+/**
+ * Market sentiment indicator
+ * 市场情绪指标
+ */
+export interface MarketSentiment {
+  date: string;             // Date / 日期
+  upCount: number;          // Up stock count / 上涨家数
+  downCount: number;        // Down stock count / 下跌家数
+  flatCount: number;        // Flat stock count / 平盘家数
+  limitUpCount: number;     // Limit up count / 涨停家数
+  limitDownCount: number;   // Limit down count / 跌停家数
+  upDownRatio: number;      // Up/Down ratio / 涨跌比
+  avgChangePercent: number; // Average change percent / 平均涨跌幅
+  totalAmount: number;      // Total trading amount / 总成交额
+  newHighCount: number;     // 52-week high count / 创新高家数
+  newLowCount: number;      // 52-week low count / 创新低家数
+  sentimentScore: number;   // Sentiment score 0-100 / 情绪分数
+  timestamp: number;        // Unix timestamp / 时间戳
+}
