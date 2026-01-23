@@ -1,7 +1,14 @@
 "use client";
 
+/**
+ * Paper Trading Page
+ * 模拟交易页面 - 完整的交易功能，处理各种边缘情况
+ * Uses DashboardHeader for consistent navigation across all dashboard pages
+ * 使用 DashboardHeader 确保所有仪表板页面导航一致
+ */
+
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import {
   TrendingUp,
   TrendingDown,
@@ -362,46 +369,9 @@ export default function PaperTradingPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-400 flex items-center justify-center">
-                <span className="text-primary-600 font-bold">G</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                GuShen<span className="text-accent">.</span>
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-6">
-              <Link href="/dashboard" className="text-white/60 hover:text-white text-sm transition">
-                策略编辑器
-              </Link>
-              <Link href="/dashboard/strategies" className="text-white/60 hover:text-white text-sm transition">
-                策略管理
-              </Link>
-              <Link href="/dashboard/paper-trading" className="text-accent text-sm font-medium">
-                模拟交易
-              </Link>
-              <Link href="/dashboard/account" className="text-white/60 hover:text-white text-sm transition">
-                账户管理
-              </Link>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={refreshAll}
-                disabled={isLoading}
-                className="p-2 text-white/60 hover:text-white transition"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Unified Dashboard Header with account status */}
+      {/* 统一的仪表板头部，包含账户状态 */}
+      <DashboardHeader />
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-6 py-6">

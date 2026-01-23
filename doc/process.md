@@ -5,6 +5,328 @@ This document tracks all development progress, feature modifications, and bug fi
 
 ---
 
+## 2026-01-23 Phase 2: Dashboard账户状态统一 | Dashboard Account Status Unification
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+**Priority | 优先级**: P1 (用户系统)
+
+### 用户需求 | User Requirements
+
+统一所有Dashboard页面使用 `DashboardHeader` 组件显示账户状态：
+- 用户角色徽章（免费版/标准版/专业版）
+- 用户头像和登录状态
+- 一致的导航体验
+
+Unify all Dashboard pages to use `DashboardHeader` component for account status display:
+- User role badge (Free/Standard/Premium)
+- User avatar and login status
+- Consistent navigation experience
+
+### 验证完成项 | Verified Completions
+
+#### 1. 数据库Schema已完整实现 | Database Schema Already Complete
+**File | 文件**: `gushen-web/src/lib/db/schema.ts`
+- ✅ `users` - 用户认证表
+- ✅ `userPreferences` - 用户偏好表
+- ✅ `userDrafts` - 草稿存储表
+- ✅ `tenants`, `tenantMembers` - 多租户支持
+- ✅ `strategyHistory`, `backtestHistory`, `tradingHistory` - 用户历史记录
+
+#### 2. withUser认证中间件已完整实现 | withUser Middleware Already Complete
+**File | 文件**: `gushen-web/src/lib/auth/with-user.ts`
+- ✅ `withUser` - 必需认证中间件
+- ✅ `withRole` - 角色级访问控制
+- ✅ `withOptionalUser` - 可选认证
+- ✅ `getUserScopedKey` / `parseUserScopedKey` - 客户端辅助函数
+
+### 修改文件 | Modified Files
+
+#### 1. 策略验证页面 | Strategy Validation Page
+**File | 文件**: `gushen-web/src/app/dashboard/strategy-validation/page.tsx`
+
+**变更 | Changes**:
+- ✅ 将 `NavHeader` 导入替换为 `DashboardHeader`
+- ✅ 替换所有 `<NavHeader />` 为 `<DashboardHeader />`
+
+#### 2. 账户管理页面 | Account Management Page
+**File | 文件**: `gushen-web/src/app/dashboard/account/page.tsx`
+
+**变更 | Changes**:
+- ✅ 添加 `DashboardHeader` 导入和 JSDoc 注释
+- ✅ 删除42行自定义内联头部，替换为 `<DashboardHeader />`
+- ✅ 刷新按钮移至页面内容区
+
+#### 3. 用户设置页面 | User Settings Page
+**File | 文件**: `gushen-web/src/app/dashboard/settings/page.tsx`
+
+**变更 | Changes**:
+- ✅ 添加 `DashboardHeader` 导入和 JSDoc 注释
+- ✅ 删除自定义内联头部，替换为 `<DashboardHeader />`
+- ✅ 保留 `Link` 导入（帮助链接使用）
+
+#### 4. 策略管理页面 | Strategy Management Page
+**File | 文件**: `gushen-web/src/app/dashboard/strategies/page.tsx`
+
+**变更 | Changes**:
+- ✅ 添加 `DashboardHeader` 导入和 JSDoc 注释
+- ✅ 删除36行自定义内联头部，替换为 `<DashboardHeader />`
+- ✅ 移除未使用的 `Link` 导入
+
+#### 5. 模拟交易页面 | Paper Trading Page
+**File | 文件**: `gushen-web/src/app/dashboard/paper-trading/page.tsx`
+
+**变更 | Changes**:
+- ✅ 添加 `DashboardHeader` 导入和 JSDoc 注释
+- ✅ 删除40行自定义内联头部，替换为 `<DashboardHeader />`
+- ✅ 移除未使用的 `Link` 导入
+
+### 结果 | Results
+
+所有Dashboard页面现在统一使用 `DashboardHeader` 组件：
+All Dashboard pages now use the unified `DashboardHeader` component:
+
+| 页面 | Page | 之前 | 现在 |
+|------|------|------|------|
+| `/dashboard` | 策略编辑器 | DashboardHeader | DashboardHeader ✅ |
+| `/dashboard/strategy-validation` | 策略验证 | NavHeader | DashboardHeader ✅ |
+| `/dashboard/advisor` | 投资顾问 | DashboardHeader | DashboardHeader ✅ |
+| `/dashboard/trading` | 交易面板 | DashboardHeader | DashboardHeader ✅ |
+| `/dashboard/history` | 历史记录 | DashboardHeader | DashboardHeader ✅ |
+| `/dashboard/insights` | 机构洞察 | DashboardHeader | DashboardHeader ✅ |
+| `/dashboard/account` | 账户管理 | 自定义头部 | DashboardHeader ✅ |
+| `/dashboard/settings` | 用户设置 | 自定义头部 | DashboardHeader ✅ |
+| `/dashboard/strategies` | 策略管理 | 自定义头部 | DashboardHeader ✅ |
+| `/dashboard/paper-trading` | 模拟交易 | 自定义头部 | DashboardHeader ✅ |
+
+**TypeScript检查 | TypeScript Check**: ✅ 通过 | Passed
+
+---
+
+## 2026-01-23 紧急修复 v1.2.1: 风险声明、三道六术、大师视角增强 | Urgent Fix v1.2.1
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+**Priority | 优先级**: P0/P1 (紧急修复)
+
+### 用户需求 | User Requirements
+
+完成计划中的紧急修复项：
+1. 登录页风险提示与免责协议 - 投资平台合规要求
+2. 三道六术改为可选上下文 - 简化页面展示
+3. 大师视角提炼战法核心 - 增强大师选择体验
+
+Complete urgent fixes from the plan:
+1. Risk disclaimer on login/register pages - Investment platform compliance
+2. Convert "三道六术" to optional context - Simplify page display
+3. Enhance master perspective with core tactics - Improve master selection UX
+
+### 新增文件 | New Files
+
+#### 1. 风险声明组件 | Risk Disclaimer Components
+**File | 文件**: `gushen-web/src/components/auth/risk-disclaimer.tsx` (~170行)
+
+**组件 | Components**:
+- `RiskDisclaimer` - 风险声明面板（可折叠，中英双语）
+- `RiskAgreementCheckbox` - 风险协议同意复选框
+- `CompactRiskNotice` - 紧凑风险提示（页头/页脚用）
+
+**功能特性 | Features**:
+- 5条投资风险提示（中英双语）
+- 可折叠面板（紧凑模式默认折叠）
+- 必须勾选同意才能登录/注册
+- Amber 警告色主题
+
+#### 2. 认证组件索引 | Auth Components Index
+**File | 文件**: `gushen-web/src/components/auth/index.ts`
+- 统一导出风险声明组件
+
+### 修改文件 | Modified Files
+
+#### 1. 登录页面添加风险声明 | Login Page Risk Disclaimer
+**File | 文件**: `gushen-web/src/app/auth/login/page.tsx`
+
+**变更 | Changes**:
+- ✅ 导入 RiskDisclaimer 和 RiskAgreementCheckbox 组件
+- ✅ 添加 agreedToRisk 状态管理
+- ✅ 在提交时验证用户已同意风险声明
+- ✅ 登录按钮禁用状态与 agreedToRisk 关联
+
+#### 2. 注册页面添加风险声明 | Register Page Risk Disclaimer
+**File | 文件**: `gushen-web/src/app/auth/register/page.tsx`
+
+**变更 | Changes**:
+- ✅ 与登录页面相同的风险声明集成
+- ✅ 保持原有服务条款复选框
+
+#### 3. 投资顾问页面框架概览重构 | Advisor Page Framework Overview Refactor
+**File | 文件**: `gushen-web/src/app/dashboard/advisor/page.tsx`
+
+**变更 | Changes**:
+- ✅ 移除显式的"三道（战略层）"和"六术（战术层）"标签
+- ✅ 改为紧凑的投资理念提示
+- ✅ 新展示：决策质量 > 执行速度 · 深度理解 > 快速反应 · 系统思考 > 碎片信息
+- ✅ "Powered by DeepSeek + Multi-Agent" 保留在右侧
+
+#### 4. 大师 Agent 类型增强 | Master Agent Type Enhancement
+**File | 文件**: `gushen-web/src/lib/advisor/agent/types.ts`
+
+**变更 | Changes**:
+- ✅ 新增 `MasterCoreTactics` 接口（战法名称 + 核心要点）
+- ✅ MasterAgent 接口添加 3 个新字段：
+  - `coreTactics` - 核心战法摘要
+  - `essenceOfThought` - 思想精华（一句话概括）
+  - `signatureQuotes` - 代表性名言（2-3条）
+
+#### 5. 四位大师数据增强 | Four Masters Data Enhancement
+**File | 文件**: `gushen-web/src/lib/advisor/agent/master-agents.ts`
+
+**变更 | Changes**:
+
+**巴菲特 | Buffett**:
+```typescript
+coreTactics: {
+  title: "价值投资四步法",
+  keyPoints: [
+    "第一步：寻找护城河 - 识别企业的持久竞争优势",
+    "第二步：计算内在价值 - DCF估值与所有者盈余",
+    "第三步：等待安全边际 - 以折扣价买入优质企业",
+    "第四步：长期持有 - 让复利为你工作",
+  ],
+},
+essenceOfThought: "用合理价格买入优秀企业，而非用低价买入平庸企业",
+signatureQuotes: [
+  "别人恐惧时我贪婪，别人贪婪时我恐惧",
+  "永远不要亏钱，这是第一条规则",
+  "时间是优秀企业的朋友",
+],
+```
+
+**彼得·林奇 | Peter Lynch**:
+```typescript
+coreTactics: {
+  title: "六类股票分类投资法",
+  keyPoints: [
+    "缓慢增长股：追求稳定股息的成熟企业",
+    "稳定增长股：抵御经济衰退的优质蓝筹",
+    "快速增长股：寻找10倍股的核心来源",
+    "周期股：把握行业周期的波动机会",
+    "困境反转股：捕捉业绩触底反弹的时机",
+    "隐蔽资产股：发现被低估的隐藏价值",
+  ],
+},
+essenceOfThought: "在日常生活中发现投资机会，用PEG找到被低估的成长股",
+```
+
+**利弗莫尔 | Livermore**:
+```typescript
+coreTactics: {
+  title: "关键点突破交易法",
+  keyPoints: [
+    "识别关键点：等待价格突破重要阻力/支撑位",
+    "分批建仓：初始仓位20%，确认后金字塔加仓",
+    "严格止损：亏损超过10%立即止损离场",
+    "让利润奔跑：不急于止盈，跟随趋势",
+    "空仓也是仓位：没有机会时耐心等待",
+  ],
+},
+essenceOfThought: "顺势而为，截断亏损让利润奔跑，钱是坐着赚的",
+```
+
+**西蒙斯 | Simons**:
+```typescript
+coreTactics: {
+  title: "量化因子投资法",
+  keyPoints: [
+    "数据收集：尽可能获取高质量多维数据",
+    "模式识别：用数学模型发现历史规律",
+    "回测验证：严格的样本外测试防止过拟合",
+    "风险控制：单一头寸不超过组合的1%",
+    "持续迭代：不断优化模型适应市场变化",
+  ],
+},
+essenceOfThought: "用数据和模型替代人为判断，预测准确率略高于50%即可盈利",
+```
+
+#### 6. 大师摘要函数增强 | Master Summary Function Enhancement
+**File | 文件**: `gushen-web/src/lib/advisor/agent/master-agents.ts`
+
+**变更 | Changes**:
+- ✅ 新增 `MasterAgentSummary` 接口（包含增强字段）
+- ✅ `getMasterAgentSummaries()` 返回增强的摘要数据
+
+#### 7. 大师选择器 UI 增强 | Master Selector UI Enhancement
+**File | 文件**: `gushen-web/src/components/advisor/philosophy-selector.tsx`
+
+**变更 | Changes**:
+- ✅ 导入 `MasterAgentSummary` 类型
+- ✅ 新增 `MasterAgentCard` 组件（可展开/折叠）
+- ✅ 卡片默认显示：大师名称、思想精华（一句话）
+- ✅ 点击"查看战法"展开详细内容：
+  - 核心战法标题和要点列表
+  - 2条代表性名言
+- ✅ 大师选择区改为 2 列网格布局
+
+### 验证结果 | Verification
+
+```bash
+$ bun run typecheck
+$ tsc --noEmit
+# ✅ 无错误，类型检查通过
+```
+
+### 代码统计 | Code Statistics
+
+- **新增文件数**: 2个
+- **修改文件数**: 7个
+- **新增代码行数**: ~450行
+- **修改代码行数**: ~200行
+
+### UI 效果 | UI Result
+
+**登录/注册页面**:
+```
+┌────────────────────────────────────────────────────┐
+│ ⚠️ 投资风险提示 | Investment Risk Warning    [▼]  │
+│ • 本平台提供的分析仅供参考，不构成投资建议         │
+│ • 股票投资有风险，入市需谨慎                        │
+│ • 历史回测结果不代表未来收益                        │
+│ • AI分析可能存在误差，请独立判断                    │
+│ • 请根据自身风险承受能力理性投资                    │
+├────────────────────────────────────────────────────┤
+│ ☑️ 我已阅读并理解上述 投资风险提示 ，确认自愿承担 │
+└────────────────────────────────────────────────────┘
+```
+
+**大师视角选择卡片**:
+```
+┌─────────────────────────────────────────────────────┐
+│ 🏛️ 巴菲特视角                    Warren Buffett    │
+│ 用合理价格买入优秀企业，而非用低价买入平庸企业    │
+│                   [查看战法 ▼]                       │
+├─────────────────────────────────────────────────────┤
+│ 价值投资四步法                                      │
+│ • 第一步：寻找护城河 - 识别企业的持久竞争优势      │
+│ • 第二步：计算内在价值 - DCF估值与所有者盈余       │
+│ • 第三步：等待安全边际 - 以折扣价买入优质企业      │
+│ • 第四步：长期持有 - 让复利为你工作                 │
+│                                                      │
+│ 核心理念                                            │
+│ "别人恐惧时我贪婪，别人贪婪时我恐惧"               │
+│ "永远不要亏钱，这是第一条规则"                      │
+└─────────────────────────────────────────────────────┘
+```
+
+### 关键文件 | Critical Files
+
+1. `gushen-web/src/components/auth/risk-disclaimer.tsx` - 风险声明组件
+2. `gushen-web/src/app/auth/login/page.tsx` - 登录页面
+3. `gushen-web/src/app/auth/register/page.tsx` - 注册页面
+4. `gushen-web/src/app/dashboard/advisor/page.tsx` - 投资顾问页面
+5. `gushen-web/src/lib/advisor/agent/types.ts` - Agent 类型定义
+6. `gushen-web/src/lib/advisor/agent/master-agents.ts` - 大师 Agent 数据
+7. `gushen-web/src/components/advisor/philosophy-selector.tsx` - 投资哲学选择器
+
+---
+
 ## 2026-01-23 数据采集专项实施 | Data Collection Implementation
 **Date | 日期**: 2026-01-23
 **Status | 状态**: ✅ Completed | 已完成

@@ -50,6 +50,24 @@ export const BUFFETT_AGENT: MasterAgent = {
     "《滚雪球》",
     "《聪明的投资者》(导师格雷厄姆著)",
   ],
+
+  // Enhanced fields for better presentation / 增强展示字段
+  coreTactics: {
+    title: "价值投资四步法",
+    keyPoints: [
+      "第一步：寻找护城河 - 识别企业的持久竞争优势",
+      "第二步：计算内在价值 - DCF估值与所有者盈余",
+      "第三步：等待安全边际 - 以折扣价买入优质企业",
+      "第四步：长期持有 - 让复利为你工作",
+    ],
+  },
+  essenceOfThought: "用合理价格买入优秀企业，而非用低价买入平庸企业",
+  signatureQuotes: [
+    "别人恐惧时我贪婪，别人贪婪时我恐惧",
+    "永远不要亏钱，这是第一条规则",
+    "时间是优秀企业的朋友",
+  ],
+
   temperature: 0.4,
   maxTokens: 1500,
   systemPrompt: `你是沃伦·巴菲特（Warren Buffett），被誉为"奥马哈先知"的传奇投资者。
@@ -137,6 +155,26 @@ export const LYNCH_AGENT: MasterAgent = {
     "长期持有优秀成长股",
   ],
   books: ["《彼得·林奇的成功投资》", "《战胜华尔街》", "《学以致富》"],
+
+  // Enhanced fields for better presentation / 增强展示字段
+  coreTactics: {
+    title: "六类股票分类投资法",
+    keyPoints: [
+      "缓慢增长股：追求稳定股息的成熟企业",
+      "稳定增长股：抵御经济衰退的优质蓝筹",
+      "快速增长股：寻找10倍股的核心来源",
+      "周期股：把握行业周期的波动机会",
+      "困境反转股：捕捉业绩触底反弹的时机",
+      "隐蔽资产股：发现被低估的隐藏价值",
+    ],
+  },
+  essenceOfThought: "在日常生活中发现投资机会，用PEG找到被低估的成长股",
+  signatureQuotes: [
+    "买你了解的东西",
+    "你在购物中心看到的，比华尔街更多",
+    "寻找10倍股（ten-bagger）",
+  ],
+
   temperature: 0.5,
   maxTokens: 1400,
   systemPrompt: `你是彼得·林奇（Peter Lynch），管理麦哲伦基金创造13年29%年化回报的传奇基金经理。
@@ -226,6 +264,25 @@ export const LIVERMORE_AGENT: MasterAgent = {
     "市场走势比原因重要",
   ],
   books: ["《股票大作手回忆录》", "《股票大作手操盘术》"],
+
+  // Enhanced fields for better presentation / 增强展示字段
+  coreTactics: {
+    title: "关键点突破交易法",
+    keyPoints: [
+      "识别关键点：等待价格突破重要阻力/支撑位",
+      "分批建仓：初始仓位20%，确认后金字塔加仓",
+      "严格止损：亏损超过10%立即止损离场",
+      "让利润奔跑：不急于止盈，跟随趋势",
+      "空仓也是仓位：没有机会时耐心等待",
+    ],
+  },
+  essenceOfThought: "顺势而为，截断亏损让利润奔跑，钱是坐着赚的",
+  signatureQuotes: [
+    "截断亏损，让利润奔跑",
+    "趋势是你的朋友",
+    "钱是坐着赚的，不是交易赚的",
+  ],
+
   temperature: 0.5,
   maxTokens: 1300,
   systemPrompt: `你是杰西·利弗莫尔（Jesse Livermore），华尔街最伟大的交易员之一，趋势跟踪的先驱。
@@ -317,6 +374,25 @@ export const SIMONS_AGENT: MasterAgent = {
     "保持纪律，排除情绪",
   ],
   books: ["《征服市场的人》"],
+
+  // Enhanced fields for better presentation / 增强展示字段
+  coreTactics: {
+    title: "量化因子投资法",
+    keyPoints: [
+      "数据收集：尽可能获取高质量多维数据",
+      "模式识别：用数学模型发现历史规律",
+      "回测验证：严格的样本外测试防止过拟合",
+      "风险控制：单一头寸不超过组合的1%",
+      "持续迭代：不断优化模型适应市场变化",
+    ],
+  },
+  essenceOfThought: "用数据和模型替代人为判断，预测准确率略高于50%即可盈利",
+  signatureQuotes: [
+    "数据说话，模型决策",
+    "预测准确率只需略高于50%",
+    "分散化是免费的午餐",
+  ],
+
   temperature: 0.3,
   maxTokens: 1200,
   systemPrompt: `你是吉姆·西蒙斯（Jim Simons），文艺复兴科技的创始人，量化投资的教父。
@@ -402,16 +478,29 @@ export function getMasterAgentByPhilosophy(
 }
 
 /**
- * Get master agent summary / 获取大师 Agent 摘要信息
+ * Master agent summary type for UI display
+ * 用于UI展示的大师摘要类型
  */
-export function getMasterAgentSummaries(): Array<{
+export interface MasterAgentSummary {
   id: string;
   name: string;
   nameEn: string;
   masterName: string;
   philosophy: InvestmentPhilosophy;
   tagline: string;
-}> {
+  // Enhanced fields / 增强字段
+  coreTactics: {
+    title: string;
+    keyPoints: string[];
+  };
+  essenceOfThought: string;
+  signatureQuotes: string[];
+}
+
+/**
+ * Get master agent summary / 获取大师 Agent 摘要信息
+ */
+export function getMasterAgentSummaries(): MasterAgentSummary[] {
   return ALL_MASTER_AGENTS.map((agent) => ({
     id: agent.id,
     name: agent.name,
@@ -419,5 +508,9 @@ export function getMasterAgentSummaries(): Array<{
     masterName: agent.masterName,
     philosophy: agent.philosophy!,
     tagline: agent.quotes[0] || "",
+    // Enhanced fields / 增强字段
+    coreTactics: agent.coreTactics,
+    essenceOfThought: agent.essenceOfThought,
+    signatureQuotes: agent.signatureQuotes,
   }));
 }

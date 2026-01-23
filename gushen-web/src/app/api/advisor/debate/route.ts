@@ -148,6 +148,8 @@ async function handleDebateStart(body: DebateStartRequest) {
     `[Debate API] Created debate session ${session.id} for "${topic}"`,
   );
 
+  // Return complete session object including participants (fix for validation error)
+  // 返回完整的session对象，包含participants字段（修复验证错误）
   return NextResponse.json({
     success: true,
     session: {
@@ -155,6 +157,12 @@ async function handleDebateStart(body: DebateStartRequest) {
       topic: session.topic,
       symbol: session.symbol,
       rounds: session.rounds,
+      participants: {
+        bull: session.participants.bull,
+        bear: session.participants.bear,
+        moderator: session.participants.moderator,
+      },
+      arguments: session.arguments,
       createdAt: session.createdAt,
     },
   });

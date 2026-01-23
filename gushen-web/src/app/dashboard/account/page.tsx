@@ -1,7 +1,13 @@
 "use client";
 
+/**
+ * Account Management Page
+ * 账户管理页面 - 展示账户详情、交易统计、重置功能
+ * Uses DashboardHeader for consistent navigation across all dashboard pages
+ * 使用 DashboardHeader 确保所有仪表板页面导航一致
+ */
+
 import { useState, useEffect, useCallback } from "react";
-import Link from "next/link";
 import {
   Wallet,
   TrendingUp,
@@ -16,6 +22,7 @@ import {
   X,
   CheckCircle
 } from "lucide-react";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
 /**
  * Account Summary interface
@@ -140,46 +147,9 @@ export default function AccountPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-400 flex items-center justify-center">
-                <span className="text-primary-600 font-bold">G</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                GuShen<span className="text-accent">.</span>
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-6">
-              <Link href="/dashboard" className="text-white/60 hover:text-white text-sm transition">
-                策略编辑器
-              </Link>
-              <Link href="/dashboard/strategies" className="text-white/60 hover:text-white text-sm transition">
-                策略管理
-              </Link>
-              <Link href="/dashboard/paper-trading" className="text-white/60 hover:text-white text-sm transition">
-                模拟交易
-              </Link>
-              <Link href="/dashboard/account" className="text-accent text-sm font-medium">
-                账户管理
-              </Link>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              <button
-                onClick={fetchAccount}
-                disabled={isLoading}
-                className="p-2 text-white/60 hover:text-white transition"
-              >
-                <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
-              </button>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Unified Dashboard Header with account status */}
+      {/* 统一的仪表板头部，包含账户状态 */}
+      <DashboardHeader />
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
@@ -197,13 +167,24 @@ export default function AccountPage() {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowResetConfirm(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-loss/10 border border-white/10 hover:border-loss/30 rounded-lg text-white/60 hover:text-loss text-sm transition"
-          >
-            <RotateCcw className="w-4 h-4" />
-            重置账户
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={fetchAccount}
+              disabled={isLoading}
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-white/20 rounded-lg text-white/60 hover:text-white text-sm transition"
+              title="刷新账户数据"
+            >
+              <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
+              刷新
+            </button>
+            <button
+              onClick={() => setShowResetConfirm(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white/5 hover:bg-loss/10 border border-white/10 hover:border-loss/30 rounded-lg text-white/60 hover:text-loss text-sm transition"
+            >
+              <RotateCcw className="w-4 h-4" />
+              重置账户
+            </button>
+          </div>
         </div>
 
         {/* Messages */}

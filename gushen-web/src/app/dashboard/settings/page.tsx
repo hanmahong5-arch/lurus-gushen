@@ -1,11 +1,25 @@
 "use client";
 
+/**
+ * User Settings Page
+ * 用户设置页面
+ *
+ * Features:
+ * - Profile management (display name, avatar, timezone)
+ * - Security settings (password change, 2FA, sessions)
+ * - Notification preferences (email, push, system)
+ * - Subscription management (plan details, upgrade)
+ * Uses DashboardHeader for consistent navigation
+ * 使用 DashboardHeader 确保导航一致性
+ */
+
 import { useState } from "react";
 import Link from "next/link";
 import { ProfileSettings } from "@/components/settings/profile-settings";
 import { SecuritySettings } from "@/components/settings/security-settings";
 import { NotificationSettings } from "@/components/settings/notification-settings";
 import { SubscriptionSettings } from "@/components/settings/subscription-settings";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
 /**
  * Settings tab type
@@ -85,61 +99,9 @@ export default function SettingsPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-400 flex items-center justify-center">
-                <span className="text-primary-600 font-bold">G</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                GuShen<span className="text-accent">.</span>
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-6">
-              <Link
-                href="/dashboard"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                策略编辑器
-              </Link>
-              <Link
-                href="/dashboard/advisor"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                投资顾问
-              </Link>
-              <Link
-                href="/dashboard/trading"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                交易面板
-              </Link>
-              <Link
-                href="/dashboard/history"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                历史记录
-              </Link>
-              <Link
-                href="/dashboard/settings"
-                className="text-accent text-sm font-medium"
-              >
-                设置
-              </Link>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-white/50">演示账户</span>
-              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-                <span className="text-accent text-sm">D</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Unified Dashboard Header with account status */}
+      {/* 统一的仪表板头部，包含账户状态 */}
+      <DashboardHeader />
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-6 py-8">

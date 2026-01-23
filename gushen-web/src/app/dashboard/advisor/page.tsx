@@ -49,72 +49,31 @@ export default function AdvisorPage() {
 }
 
 /**
- * Framework Overview Component
- * 框架概览组件
+ * Framework Overview Component (Redesigned)
+ * 框架概览组件（重新设计）
+ *
+ * Changed: Removed explicit "三道六术" labels, now shows compact philosophy hint
+ * 修改：移除了明确的"三道六术"标签，现在显示紧凑的投资理念提示
  */
 function FrameworkOverview() {
   return (
-    <div className="px-4 py-3 bg-surface/50 border-b border-border">
-      <div className="flex items-start gap-6 text-xs">
-        {/* Three Dao */}
-        {/* 三道 */}
-        <div>
-          <h4 className="text-accent font-semibold mb-1">三道（战略层）</h4>
-          <div className="space-y-0.5 text-white/50">
-            <div>
-              <span className="text-white/70">天道</span> 宏观环境·周期·政策
-            </div>
-            <div>
-              <span className="text-white/70">地道</span> 市场结构·行业·技术
-            </div>
-            <div>
-              <span className="text-white/70">人道</span> 情绪资金·持仓·行为
-            </div>
-          </div>
+    <div className="px-4 py-2 bg-surface/30 border-b border-border">
+      <div className="flex items-center justify-between text-xs">
+        {/* Core Philosophy Hint */}
+        {/* 核心理念提示 */}
+        <div className="flex items-center gap-4 text-white/50">
+          <span className="text-accent">💡</span>
+          <span>
+            <span className="text-white/70">决策质量</span> &gt; 执行速度 ·{" "}
+            <span className="text-white/70">深度理解</span> &gt; 快速反应 ·{" "}
+            <span className="text-white/70">系统思考</span> &gt; 碎片信息
+          </span>
         </div>
 
-        {/* Six Shu */}
-        {/* 六术 */}
-        <div>
-          <h4 className="text-accent font-semibold mb-1">六术（战术层）</h4>
-          <div className="flex gap-4 text-white/50">
-            <div className="space-y-0.5">
-              <div>
-                <span className="text-white/70">政策术</span> 政策解读
-              </div>
-              <div>
-                <span className="text-white/70">资金术</span> 资金追踪
-              </div>
-              <div>
-                <span className="text-white/70">基本术</span> 估值分析
-              </div>
-            </div>
-            <div className="space-y-0.5">
-              <div>
-                <span className="text-white/70">技术术</span> 形态信号
-              </div>
-              <div>
-                <span className="text-white/70">情绪术</span> 情绪监控
-              </div>
-              <div>
-                <span className="text-white/70">风控术</span> 风险管理
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Core Philosophy + Powered By */}
-        {/* 核心理念 + 技术支持 */}
-        <div className="ml-auto text-right">
-          <h4 className="text-accent font-semibold mb-1">核心理念</h4>
-          <div className="text-white/50">
-            <div>决策质量 &gt; 执行速度</div>
-            <div>深度理解 &gt; 快速反应</div>
-            <div>系统思考 &gt; 碎片信息</div>
-          </div>
-          <div className="mt-2 pt-2 border-t border-border text-white/30">
-            Powered by DeepSeek + 三道六术
-          </div>
+        {/* Powered By */}
+        {/* 技术支持 */}
+        <div className="text-white/30">
+          Powered by DeepSeek + Multi-Agent
         </div>
       </div>
     </div>

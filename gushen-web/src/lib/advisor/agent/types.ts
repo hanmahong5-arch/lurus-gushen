@@ -108,6 +108,15 @@ export interface ResearcherAgent extends AgentRole {
 }
 
 /**
+ * Core tactics structure for master agents
+ * 大师核心战法结构
+ */
+export interface MasterCoreTactics {
+  title: string; // 战法名称
+  keyPoints: string[]; // 核心要点
+}
+
+/**
  * Master Investor Agent / 大师级投资者 Agent
  */
 export interface MasterAgent extends AgentRole {
@@ -117,6 +126,11 @@ export interface MasterAgent extends AgentRole {
   quotes: string[]; // 经典语录
   tradingRules: string[]; // 交易规则
   books?: string[]; // 著作
+
+  // Enhanced fields for better presentation / 增强展示字段
+  coreTactics: MasterCoreTactics; // 核心战法摘要
+  essenceOfThought: string; // 思想精华（一句话概括）
+  signatureQuotes: string[]; // 代表性名言（2-3条最精华）
 }
 
 // ============================================================================

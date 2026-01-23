@@ -13,7 +13,7 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
-import { NavHeader } from "@/components/dashboard/nav-header";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { StrategyGuideCard } from "@/components/strategy-editor/strategy-guide-card";
 import {
   ConfigPanel,
@@ -294,7 +294,7 @@ export default function StrategyValidationPage() {
   if (isInitializing) {
     return (
       <div className="min-h-screen bg-background">
-        <NavHeader />
+        <DashboardHeader />
         <main className="max-w-7xl mx-auto px-6 py-8">
           <div className="flex items-center justify-center h-64">
             <div className="text-center">
@@ -309,7 +309,7 @@ export default function StrategyValidationPage() {
 
   return (
     <div className="min-h-screen bg-background">
-      <NavHeader />
+      <DashboardHeader />
 
       <main className="max-w-7xl mx-auto px-6 py-8">
         {/* Page Header */}

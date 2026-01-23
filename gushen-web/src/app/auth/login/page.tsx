@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Mail, Lock, AlertCircle, Loader2 } from "lucide-react";
+import { RiskDisclaimer, RiskAgreementCheckbox } from "@/components/auth";
 
 function LoginForm() {
   const router = useRouter();
@@ -26,11 +27,22 @@ function LoginForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState(error || "");
   const [showResetSuccess, setShowResetSuccess] = useState(resetSuccess);
+  // Risk agreement state - user must agree to investment risks before login
+  // 风险声明同意状态 - 用户必须同意投资风险才能登录
+  const [agreedToRisk, setAgreedToRisk] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setErrorMessage("");
+
+    // Validate risk agreement before proceeding
+    // 验证风险声明同意状态
+    if (!agreedToRisk) {
+      setErrorMessage("请先阅读并同意投资风险提示");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       const result = await signIn("credentials", {
@@ -124,11 +136,24 @@ function LoginForm() {
           </div>
         </div>
 
+        {/* Risk Disclaimer - Investment risk warning */}
+        {/* 风险声明 - 投资风险提示 */}
+        <RiskDisclaimer compact className="mt-4" />
+
+        {/* Risk Agreement Checkbox */}
+        {/* 风险协议同意复选框 */}
+        <RiskAgreementCheckbox
+          checked={agreedToRisk}
+          onChange={setAgreedToRisk}
+          disabled={isLoading}
+          className="mt-3"
+        />
+
         {/* Submit Button */}
         <Button
           type="submit"
-          className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold"
-          disabled={isLoading}
+          className="w-full py-3 bg-amber-500 hover:bg-amber-600 text-slate-900 font-semibold mt-4"
+          disabled={isLoading || !agreedToRisk}
         >
           {isLoading ? (
             <>

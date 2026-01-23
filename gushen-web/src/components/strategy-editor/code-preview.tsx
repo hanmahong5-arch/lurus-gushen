@@ -24,6 +24,8 @@ interface CodePreviewProps {
   showMinimap?: boolean;
   // Collapsible feature props / 折叠功能属性
   collapsible?: boolean;
+  // Default to collapsed for better UX - user can expand to see full code
+  // 默认折叠以获得更好的用户体验 - 用户可以展开查看完整代码
   defaultCollapsed?: boolean;
   onCollapseChange?: (collapsed: boolean) => void;
   // Code-parameter linkage props / 代码-参数联动属性
@@ -346,7 +348,7 @@ export function CodePreview({
   filename = "strategy.py",
   showMinimap = true,
   collapsible = true,
-  defaultCollapsed = false,
+  defaultCollapsed = true,  // Changed: default to collapsed for generated strategy code
   onCollapseChange,
   highlightedLine = null,
   onHighlightClear,

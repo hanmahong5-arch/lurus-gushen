@@ -22,7 +22,7 @@ import {
   getTradingStyleOptions,
   getSpecialtyStrategyOptions,
 } from '@/lib/advisor/philosophies';
-import { getMasterAgentSummaries } from '@/lib/advisor/agent/master-agents';
+import { getMasterAgentSummaries, type MasterAgentSummary } from '@/lib/advisor/agent/master-agents';
 import { getContextSummary } from '@/lib/advisor/context-builder';
 
 // ============================================================================
@@ -271,7 +271,8 @@ export function PhilosophySelector({
         expanded={expandedSection === 'master'}
         onToggle={() => toggleSection('master')}
       >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <div className="space-y-3">
+          {/* Standard Analysis Option */}
           <SelectableCard
             icon="🔄"
             title="不使用"
@@ -279,16 +280,19 @@ export function PhilosophySelector({
             selected={!context.masterAgent}
             onClick={() => handleMasterChange(undefined)}
           />
-          {masters.map((m) => (
-            <SelectableCard
-              key={m.id}
-              icon={philosophyIcons[m.philosophy]}
-              title={m.name}
-              subtitle={m.masterName}
-              selected={context.masterAgent === m.id}
-              onClick={() => handleMasterChange(m.id)}
-            />
-          ))}
+
+          {/* Master Cards with Enhanced Info */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {masters.map((m) => (
+              <MasterAgentCard
+                key={m.id}
+                master={m}
+                icon={philosophyIcons[m.philosophy]}
+                selected={context.masterAgent === m.id}
+                onClick={() => handleMasterChange(m.id)}
+              />
+            ))}
+          </div>
         </div>
       </Section>
     </div>
@@ -389,6 +393,108 @@ function CompactSelector({ summary, onExpand, className }: CompactSelectorProps)
       )}
       <span className="text-white/30 ml-auto">▶</span>
     </button>
+  );
+}
+
+// ============================================================================
+// Master Agent Card - Enhanced Display
+// ============================================================================
+
+interface MasterAgentCardProps {
+  master: MasterAgentSummary;
+  icon: string;
+  selected: boolean;
+  onClick: () => void;
+}
+
+/**
+ * MasterAgentCard - Enhanced master agent display with tactics and quotes
+ * 大师卡片 - 增强的大师展示，包含战法和名言
+ */
+function MasterAgentCard({ master, icon, selected, onClick }: MasterAgentCardProps) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className={cn(
+        'rounded-lg border transition-all cursor-pointer',
+        selected
+          ? 'border-accent bg-accent/10'
+          : 'border-white/10 hover:border-white/30'
+      )}
+    >
+      {/* Header - Clickable to Select */}
+      <button
+        onClick={onClick}
+        className="w-full p-3 text-left"
+      >
+        <div className="flex items-start gap-3">
+          <span className="text-2xl">{icon}</span>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2">
+              <span className={cn(
+                'font-medium',
+                selected ? 'text-accent' : 'text-white'
+              )}>
+                {master.name}
+              </span>
+              <span className="text-xs text-white/50">{master.masterName}</span>
+            </div>
+            {/* Essence of Thought - One line summary */}
+            <p className="text-xs text-white/60 mt-1 line-clamp-1">
+              {master.essenceOfThought}
+            </p>
+          </div>
+          {selected && (
+            <span className="w-2 h-2 bg-accent rounded-full flex-shrink-0 mt-2" />
+          )}
+        </div>
+      </button>
+
+      {/* Expand/Collapse Toggle */}
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          setExpanded(!expanded);
+        }}
+        className="w-full px-3 pb-2 flex items-center justify-center gap-1 text-xs text-white/40 hover:text-white/60 transition"
+      >
+        <span>{expanded ? '收起详情' : '查看战法'}</span>
+        <span>{expanded ? '▲' : '▼'}</span>
+      </button>
+
+      {/* Expanded Content - Tactics and Quotes */}
+      {expanded && (
+        <div className="px-3 pb-3 border-t border-white/5 pt-3 space-y-3">
+          {/* Core Tactics */}
+          <div>
+            <div className="text-xs font-medium text-amber-400 mb-1">
+              {master.coreTactics.title}
+            </div>
+            <ul className="text-xs text-white/70 space-y-1">
+              {master.coreTactics.keyPoints.slice(0, 4).map((point, idx) => (
+                <li key={idx} className="flex items-start gap-1">
+                  <span className="text-accent flex-shrink-0">•</span>
+                  <span className="line-clamp-2">{point}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {/* Signature Quotes */}
+          <div>
+            <div className="text-xs font-medium text-white/50 mb-1">核心理念</div>
+            <div className="space-y-1">
+              {master.signatureQuotes.slice(0, 2).map((quote, idx) => (
+                <p key={idx} className="text-xs text-white/60 italic">
+                  "{quote}"
+                </p>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

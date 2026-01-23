@@ -830,9 +830,9 @@ export function AIStrategyAssistant({
         <CardTitle className="flex items-center gap-2 text-lg">
           <span className="text-2xl">🤖</span>
           <div>
-            <div>AI 策略助手</div>
+            <div>策略助手</div>
             <div className="text-xs font-normal text-muted-foreground">
-              AI Strategy Assistant
+              Strategy Assistant
             </div>
           </div>
         </CardTitle>
