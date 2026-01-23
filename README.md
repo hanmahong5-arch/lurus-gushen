@@ -8,7 +8,7 @@
 
 | 组件 | 技术栈 | 部署状态 | 访问地址 |
 |------|--------|---------|----------|
-| gushen-web | Next.js 14 + TypeScript + TailwindCSS + **Bun** | ✅ 运行中 (v20) | https://gushen.lurus.cn |
+| gushen-web | Next.js 14 + TypeScript + TailwindCSS + **Bun** + LangGraphJS | ✅ 运行中 (v21) | https://gushen.lurus.cn |
 | lurus-ai-qtrd | FastAPI + VNPy 4.x + Python 3.11 | ✅ 运行中 (v1.0.4) | https://gushen.lurus.cn/api/* |
 
 > **⚠️ 重要**: 前端项目统一使用 **bun** 作为包管理器和运行时，不使用 npm。详见根目录 CLAUDE.md。
@@ -55,6 +55,13 @@
 - **多空辩论**: 牛熊双方多轮论证
 - **11个专业Agent**: 分析师、研究员、投资大师
 - **7大投资流派**: 价值、成长、技术、量化等
+- **LangGraphJS 集成**: 使用 LangGraphJS 0.2.38 构建 Agent Graph (NEW)
+- **Agent Protocol API**: 标准化 API 接口 (/runs, /threads, /store) (NEW)
+
+### 交易面板 Trading Panel (NEW)
+- **五档行情 OrderbookPanel**: 实时显示买卖五档，点击价格自动填入
+- **技术指标面板 IndicatorQuickPanel**: RSI、MACD、KDJ、布林带等快速查看
+- **统一仪表板头部**: DashboardHeader 显示用户状态和导航
 
 ### 错误处理 Error Handling
 - **全局 Error Boundary**: 防止单一组件崩溃影响全局
@@ -73,7 +80,7 @@
 
 | Pod | 镜像版本 | 节点 | 状态 |
 |-----|---------|------|------|
-| ai-qtrd-web | gushen-web:v20 | cloud-ubuntu-3-2c2g | ✅ Running |
+| ai-qtrd-web | gushen-web:v21 | cloud-ubuntu-3-2c2g | ✅ Running |
 | ai-qtrd-api | lurus-ai-qtrd:v1.0.4 | cloud-ubuntu-2-4c8g | ✅ Running |
 
 ### 集群节点
@@ -101,6 +108,11 @@
 - `POST /api/backtest` - 前端回测执行 (支持真实/模拟数据)
 - `POST /api/advisor/*` - 投资顾问对话
 - `POST /api/auth/*` - 用户认证
+- `POST /api/agent-protocol/runs` - Agent Protocol 无状态执行 (NEW)
+- `POST /api/agent-protocol/runs/stream` - Agent Protocol 流式执行 (NEW)
+- `POST /api/agent-protocol/threads` - Agent Protocol 多轮会话管理 (NEW)
+- `GET/PUT/DELETE /api/agent-protocol/store/items` - Agent Protocol 长期记忆存储 (NEW)
+- `GET /api/history/backtests` - 回测历史查询（支持分页和筛选）(NEW)
 
 ### 后端 API (FastAPI)
 - `GET /health` - 健康检查
@@ -215,6 +227,19 @@ kubectl rollout restart deployment/ai-qtrd-web -n ai-qtrd
   - Mock券商完整实现 (A股规则、费用计算、事件系统)
   - useBroker React Hook 封装
   - 东方财富/富途/老虎/IB 接口预留
+- [x] **Phase 2-3**: 用户系统与LangGraphJS Agent集成 (2026-01-23)
+  - 用户认证中间件 (withUser, withOptionalUser, withRole)
+  - Zustand Store 用户隔离
+  - LangGraphJS 0.2.38 依赖安装与集成
+  - LangChain Tools 实现 (市场数据、技术指标)
+  - Advisor Graph 6节点设计 (router → analysts → moderator)
+  - Agent Protocol API 完整实现 (/runs, /threads, /store)
+- [x] **Phase 4**: 仪表板统一与交易面板增强 (2026-01-23)
+  - DashboardHeader 统一头部组件
+  - OrderbookPanel 五档行情显示
+  - IndicatorQuickPanel 技术指标面板 (RSI, MACD, KDJ, Bollinger)
+  - 回测历史 API (/api/history/backtests)
+  - Thread-store 模块重构修复构建错误
 
 ### 前端页面
 - `/` - 首页
