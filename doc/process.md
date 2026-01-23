@@ -5,6 +5,65 @@ This document tracks all development progress, feature modifications, and bug fi
 
 ---
 
+## 2026-01-23 Phase 4 构建修复 | Phase 4 Build Fix
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+
+### 问题 | Issue
+
+构建时出现错误：`Type 'Map<string, StoredThread>' is not assignable to type 'never'`
+
+原因：Next.js App Router API routes 不能导出非 HTTP 方法的值（threadStore Map 对象）。
+
+Build error: `Type 'Map<string, StoredThread>' is not assignable to type 'never'`
+
+Root cause: Next.js App Router API routes cannot export non-HTTP-method values (threadStore Map object).
+
+### 解决方案 | Solution
+
+1. **创建独立的 thread-store 模块**
+   - 新建 `gushen-web/src/lib/agent/stores/thread-store.ts`
+   - 将 threadStore Map 封装为模块私有变量
+   - 导出函数接口：getThread, setThread, deleteThread, hasThread, getAllThreads 等
+
+2. **更新 API 路由使用新模块**
+   - `gushen-web/src/app/api/agent-protocol/threads/route.ts` - 更新导入
+   - `gushen-web/src/app/api/agent-protocol/threads/[id]/route.ts` - 更新导入和使用
+   - `gushen-web/src/app/api/agent-protocol/threads/[id]/runs/route.ts` - 更新导入和使用
+
+### 修改文件 | Modified Files
+
+1. **`gushen-web/src/lib/agent/stores/thread-store.ts`** (新建 ~137行)
+   - StoredThread 接口定义
+   - threadStore Map（模块私有）
+   - 导出函数：getThread, setThread, deleteThread, hasThread, getAllThreads, getThreadCount, clearAllThreads, touchThread, addRunToThread, incrementMessageCount
+
+2. **`gushen-web/src/app/api/agent-protocol/threads/route.ts`**
+   - 移除 threadStore 导出
+   - 从 thread-store 模块导入函数
+
+3. **`gushen-web/src/app/api/agent-protocol/threads/[id]/route.ts`**
+   - 从 thread-store 模块导入函数
+   - 更新 GET/PATCH/DELETE 使用新函数
+
+4. **`gushen-web/src/app/api/agent-protocol/threads/[id]/runs/route.ts`**
+   - 从 thread-store 模块导入函数
+   - 更新 POST/GET 使用新函数
+
+### 验证结果 | Verification
+
+```bash
+$ bun run build
+✓ Compiled successfully
+✓ Generating static pages (42/42)
+```
+
+所有 42 个页面成功生成，构建通过。
+
+All 42 pages generated successfully, build passed.
+
+---
+
 ## 2026-01-23 Phase 4: 仪表板统一与交易面板增强 | Dashboard Unification & Trading Panel Enhancement
 **Date | 日期**: 2026-01-23
 **Status | 状态**: ✅ Completed | 已完成
