@@ -4,19 +4,32 @@
  * Trading Dashboard Page with K-line Chart and Real-time Data
  * 交易面板页面，包含K线图表和实时数据
  *
- * Refactored to use data-driven KLineChart and SymbolSelector components.
- * 重构使用数据驱动的K线图和交易对选择器组件
+ * Features:
+ * - Real-time K-line chart with market data
+ * - Five-tier orderbook display (Level 2)
+ * - Technical indicator quick panel
+ * - Mock trading with A-share rules
+ * - Unified DashboardHeader with user status
+ *
+ * 功能：
+ * - 实时K线图和市场数据
+ * - 五档行情显示（二级市场数据）
+ * - 技术指标快速面板
+ * - 模拟交易（A股规则）
+ * - 统一的仪表板头部，包含用户状态
  */
 
 import { useState, useCallback, useEffect, useMemo } from "react";
-import Link from "next/link";
 import dynamic from "next/dynamic";
 import { useMajorIndices, useNorthBoundFlow } from "@/hooks/use-market-data";
 import { DataStatusPanel } from "@/components/dashboard/data-status-panel";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import {
   SymbolSelector,
   type SymbolInfo,
 } from "@/components/trading/symbol-selector";
+import { OrderbookPanel } from "@/components/trading/orderbook-panel";
+import { IndicatorQuickPanel } from "@/components/trading/indicator-quick-panel";
 import {
   getTradingStatusInfo,
   formatTimeRemaining,
@@ -395,82 +408,8 @@ export default function TradingPage() {
         </div>
       )}
 
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-[1920px] mx-auto px-4">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-400 flex items-center justify-center">
-                <span className="text-primary-600 font-bold">G</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                GuShen<span className="text-accent">.</span>
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-6">
-              <Link
-                href="/dashboard"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                策略编辑器
-              </Link>
-              <Link
-                href="/dashboard/trading"
-                className="text-accent text-sm font-medium"
-              >
-                交易面板
-              </Link>
-              <Link
-                href="/dashboard/advisor"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                投资顾问
-              </Link>
-              <Link
-                href="/dashboard/history"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                历史记录
-              </Link>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              {/* Trading status indicator */}
-              <div
-                className={`flex items-center gap-2 px-3 py-1 rounded-lg ${
-                  tradingStatus.color === "green"
-                    ? "bg-profit/10 text-profit"
-                    : tradingStatus.color === "yellow"
-                      ? "bg-yellow-500/10 text-yellow-400"
-                      : "bg-white/5 text-white/50"
-                }`}
-              >
-                <span
-                  className={`w-2 h-2 rounded-full ${
-                    tradingStatus.color === "green"
-                      ? "bg-profit animate-pulse"
-                      : tradingStatus.color === "yellow"
-                        ? "bg-yellow-400"
-                        : "bg-white/30"
-                  }`}
-                />
-                <span className="text-sm">{tradingStatus.label}</span>
-                {timeToNext > 0 && timeToNext < 3600000 && (
-                  <span className="text-xs opacity-70">
-                    ({formatTimeRemaining(timeToNext)})
-                  </span>
-                )}
-              </div>
-
-              <span className="text-sm text-white/50">模拟交易</span>
-              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-                <span className="text-accent text-sm">D</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+      {/* Unified Dashboard Header with user status / 统一的仪表板头部，包含用户状态 */}
+      <DashboardHeader />
 
       {/* Main content */}
       <main className="max-w-[1920px] mx-auto p-4">
@@ -1119,8 +1058,21 @@ export default function TradingPage() {
             </div>
           </div>
 
-          {/* Data Status Panel */}
-          <div className="col-span-3">
+          {/* Right Side Panels - Orderbook, Indicators, and Data Status */}
+          <div className="col-span-3 space-y-4">
+            {/* Level 2 Orderbook / 五档行情 */}
+            <OrderbookPanel
+              symbol={selectedSymbol}
+              onPriceClick={(price) => setOrderPrice(price.toString())}
+            />
+
+            {/* Technical Indicators / 技术指标 */}
+            <IndicatorQuickPanel
+              symbol={selectedSymbol}
+              compact={true}
+            />
+
+            {/* Data Status Panel / 数据状态面板 */}
             <DataStatusPanel />
           </div>
         </div>

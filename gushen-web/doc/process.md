@@ -2317,3 +2317,111 @@ URL: http://43.226.46.164:3000/dashboard
 - 待部署验证
 
 ---
+
+## 2026-01-23: Phase 2 用户系统与账户隔离
+## Phase 2: User System and Account Isolation
+
+**用户需求 User Request:**
+- 实现用户数据隔离（不同用户看到各自的策略/回测历史）
+- localStorage使用用户前缀隔离
+- 所有API端点验证userId
+- Dashboard头部显示账户状态（角色、头像、登录/登出）
+
+**方法 Method:**
+
+### Phase 2A: 认证中间件创建
+
+**创建 src/lib/auth/with-user.ts:**
+- `withUser<T>` - 强制认证中间件，验证session并提取UserContext
+- `withOptionalUser<T>` - 可选认证中间件，匿名用户可访问
+- `withRole<T>` - 基于角色的访问控制（free/standard/premium）
+- `hasRequiredRole` - 角色级别检查辅助函数
+- `getUserScopedKey` - 生成用户范围的存储键
+- `parseUserScopedKey` - 解析用户范围的存储键
+
+**重构 src/lib/auth 目录结构:**
+- 移动 `src/lib/auth.ts` → `src/lib/auth/auth.ts`
+- 创建 `src/lib/auth/index.ts` 模块导出
+
+### Phase 2B: Zustand Store用户隔离
+
+**修改 src/lib/stores/strategy-workspace-store.ts:**
+- 新增 `userId` 和 `isInitialized` 状态字段
+- 新增 `initializeUserSpace(userId)` 方法
+- 新增 `clearUserSpace()` 方法
+- 新增 `getCurrentUserId()` 方法
+- 自定义 storage 实现，使用 `gushen:{userId}:{key}` 格式
+- 多标签页同步使用用户范围的键
+
+**创建 src/hooks/use-user-workspace.ts:**
+- `useUserWorkspace` hook 自动初始化用户工作空间
+- 监听NextAuth session变化
+- 返回 isReady, isAuthenticated, userId, user, status
+
+### Phase 2C: Dashboard Header组件
+
+**创建 src/components/dashboard/dashboard-header.tsx:**
+- 共享头部组件，包含导航标签
+- 用户账户状态显示（角色徽章、头像）
+- Dropdown菜单（账户设置、偏好设置、我的策略、登出）
+- 自动保存状态指示器
+- 支持 free/standard/premium 角色显示
+
+**创建 src/components/dashboard/dashboard-layout.tsx:**
+- 布局包装器，自动初始化用户工作空间
+- 加载骨架动画
+- 可选页面标题和副标题
+
+**创建 src/components/ui/dropdown-menu.tsx:**
+- 基于 Radix UI 的下拉菜单组件
+
+### Phase 2D: API端点用户认证
+
+**修改 src/app/api/history/route.ts:**
+- GET: 使用 `withUser` 从session获取userId
+- POST: 使用 `withUser` 验证用户身份
+- DELETE: 使用 `withUser` 验证用户身份
+- 移除query参数中的userId依赖
+
+**修改 src/app/api/backtest/route.ts:**
+- 使用 `withOptionalUser` 允许匿名回测
+- 认证用户的回测结果可保存到历史
+- 返回 meta.isAuthenticated 和 meta.userId
+
+### 实现结果 Result
+
+**新建文件 New Files:**
+- `src/lib/auth/with-user.ts` - 用户认证中间件（250+行）
+- `src/lib/auth/index.ts` - 模块导出
+- `src/hooks/use-user-workspace.ts` - 用户工作空间hook
+- `src/components/dashboard/dashboard-header.tsx` - Dashboard头部（250+行）
+- `src/components/dashboard/dashboard-layout.tsx` - Dashboard布局
+- `src/components/dashboard/index.ts` - 组件导出
+- `src/components/ui/dropdown-menu.tsx` - 下拉菜单组件
+
+**修改文件 Modified Files:**
+- `src/lib/auth.ts` → `src/lib/auth/auth.ts` - 移动并保留
+- `src/lib/stores/strategy-workspace-store.ts` - 用户隔离改造
+- `src/app/api/history/route.ts` - 认证中间件集成
+- `src/app/api/backtest/route.ts` - 可选认证集成
+
+**功能清单 Features:**
+1. ✅ withUser/withOptionalUser/withRole 认证中间件
+2. ✅ 用户范围的localStorage键格式 `gushen:{userId}:{key}`
+3. ✅ Dashboard头部显示账户状态
+4. ✅ 角色徽章（免费版/标准版/专业版）
+5. ✅ 用户下拉菜单（设置、策略、登出）
+6. ✅ History API使用session认证
+7. ✅ Backtest API支持匿名+认证用户
+
+**验证 Verification:**
+- ✅ TypeScript typecheck 通过
+- ✅ 安装 @radix-ui/react-dropdown-menu 依赖
+
+### 状态 Status
+
+✅ **Phase 2 开发完成 / Phase 2 Development Completed**
+- 完成时间: 2026-01-23
+- 待集成测试
+
+---

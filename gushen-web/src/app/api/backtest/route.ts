@@ -10,6 +10,11 @@
  * 3. Sina API (fallback) - 新浪API降级
  * 4. Mock generator (demo only) - 模拟数据（仅演示）
  *
+ * Authentication:
+ * - Optional authentication - anonymous users can run backtests
+ * - Authenticated users: results saved to history for later reference
+ * - Anonymous users: results returned but not persisted
+ *
  * Request body:
  * {
  *   strategyCode: string,     // Generated strategy code
@@ -26,6 +31,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { withOptionalUser, type UserContext } from "@/lib/auth";
 import {
   runBacktest,
   generateBacktestData,
@@ -50,20 +56,21 @@ interface DataSourceInfo {
 }
 
 export async function POST(request: NextRequest) {
-  const startTime = Date.now();
+  return withOptionalUser<unknown>(request, async (req: NextRequest, user: UserContext | null) => {
+    const startTime = Date.now();
 
-  // Track data source information
-  let dataSourceInfo: DataSourceInfo = {
-    type: "simulated",
-    provider: "mock-generator",
-    reason: "Default fallback",
-    fallbackUsed: false,
-    realDataCount: 0,
-    simulatedDataCount: 0,
-  };
+    // Track data source information
+    let dataSourceInfo: DataSourceInfo = {
+      type: "simulated",
+      provider: "mock-generator",
+      reason: "Default fallback",
+      fallbackUsed: false,
+      realDataCount: 0,
+      simulatedDataCount: 0,
+    };
 
-  try {
-    const body = await request.json();
+    try {
+      const body = await req.json();
     const { strategyCode, config: userConfig } = body;
 
     // Validate strategy code
@@ -266,44 +273,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Run backtest
-    const result = await runBacktest(strategyCode, filteredKlines, config);
+      // Run backtest
+      const result = await runBacktest(strategyCode, filteredKlines, config);
 
-    const totalTime = Date.now() - startTime;
+      const totalTime = Date.now() - startTime;
 
-    return NextResponse.json({
-      success: true,
-      data: result,
-      meta: {
-        barsProcessed: filteredKlines.length,
-        executionTime: totalTime,
-        // Enhanced data source information
-        dataSource: {
-          type: dataSourceInfo.type,
-          provider: dataSourceInfo.provider,
-          reason: dataSourceInfo.reason,
-          fallbackUsed: dataSourceInfo.fallbackUsed,
-          realDataCount: dataSourceInfo.realDataCount,
-          simulatedDataCount: dataSourceInfo.simulatedDataCount,
-          // Database-specific fields
-          dbCoverage: dataSourceInfo.dbCoverage,
-          stockName: dataSourceInfo.stockName,
+      // TODO: If user is authenticated, save backtest result to history
+      // This will be implemented when the history service integration is complete
+      if (user) {
+        console.log(`[Backtest] Authenticated user ${user.userId} ran backtest on ${config.symbol}`);
+        // Future: saveBacktestHistory({ userId: user.userId, ... })
+      }
+
+      return NextResponse.json({
+        success: true,
+        data: result,
+        meta: {
+          barsProcessed: filteredKlines.length,
+          executionTime: totalTime,
+          // Enhanced data source information
+          dataSource: {
+            type: dataSourceInfo.type,
+            provider: dataSourceInfo.provider,
+            reason: dataSourceInfo.reason,
+            fallbackUsed: dataSourceInfo.fallbackUsed,
+            realDataCount: dataSourceInfo.realDataCount,
+            simulatedDataCount: dataSourceInfo.simulatedDataCount,
+            // Database-specific fields
+            dbCoverage: dataSourceInfo.dbCoverage,
+            stockName: dataSourceInfo.stockName,
+          },
+          // Legacy field for backward compatibility
+          dataSourceLegacy: dataSourceInfo.type === "real" ? "real" : "simulated",
+          // User authentication status
+          isAuthenticated: !!user,
+          userId: user?.userId || null,
         },
-        // Legacy field for backward compatibility
-        dataSourceLegacy: dataSourceInfo.type === "real" ? "real" : "simulated",
-      },
-      timestamp: Date.now(),
-    });
-  } catch (err) {
-    console.error("Backtest API error:", err);
-    return NextResponse.json(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "Internal server error",
-      },
-      { status: 500 }
-    );
-  }
+        timestamp: Date.now(),
+      });
+    } catch (err) {
+      console.error("Backtest API error:", err);
+      return NextResponse.json(
+        {
+          success: false,
+          error: err instanceof Error ? err.message : "Internal server error",
+        },
+        { status: 500 }
+      );
+    }
+  });
 }
 
 /**

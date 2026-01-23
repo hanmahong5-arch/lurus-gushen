@@ -7,13 +7,16 @@
  * - Cross-page state persistence
  * - Undo/Redo support (via temporal middleware)
  * - Multi-tab synchronization (via localStorage events)
+ * - User-scoped data isolation (data separated by userId)
  *
  * This store ensures zero data loss when navigating between pages.
+ * Each user's data is stored separately using userId-prefixed keys.
  */
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
+import { getUserScopedKey } from '@/lib/auth/with-user';
 
 // ============================================================================
 // Types
@@ -63,6 +66,11 @@ export interface Draft {
 }
 
 interface WorkspaceState {
+  // User identification for data isolation
+  // 用于数据隔离的用户标识
+  userId: string | null;
+  isInitialized: boolean;
+
   // Current workspace
   current: StrategyWorkspace;
 
@@ -76,6 +84,12 @@ interface WorkspaceState {
 }
 
 interface WorkspaceActions {
+  // User management - for data isolation
+  // 用户管理 - 用于数据隔离
+  initializeUserSpace: (userId: string) => void;
+  clearUserSpace: () => void;
+  getCurrentUserId: () => string | null;
+
   // Workspace updates
   updateStrategyInput: (input: string) => void;
   updateGeneratedCode: (code: string) => void;
@@ -129,12 +143,64 @@ const INITIAL_WORKSPACE: StrategyWorkspace = {
 };
 
 const INITIAL_STATE: WorkspaceState = {
+  userId: null,
+  isInitialized: false,
   current: INITIAL_WORKSPACE,
   drafts: [],
   maxDrafts: 10,
   autoSaveEnabled: true,
   autoSaveInterval: 3,
 };
+
+// Storage key prefix for user-scoped data
+// 用户范围数据的存储键前缀
+const STORAGE_KEY_BASE = 'strategy-workspace';
+
+/**
+ * Get user-scoped storage key
+ * 获取用户范围的存储键
+ */
+function getStorageKey(userId: string | null): string {
+  if (!userId) {
+    return `gushen:anonymous:${STORAGE_KEY_BASE}`;
+  }
+  return getUserScopedKey(STORAGE_KEY_BASE, userId);
+}
+
+/**
+ * Load user's workspace data from localStorage
+ * 从 localStorage 加载用户的工作区数据
+ */
+function loadUserWorkspaceData(userId: string): Partial<WorkspaceState> | null {
+  if (typeof window === 'undefined') return null;
+
+  try {
+    const key = getStorageKey(userId);
+    const data = localStorage.getItem(key);
+    if (!data) return null;
+
+    const parsed = JSON.parse(data);
+    return parsed.state || null;
+  } catch (error) {
+    console.error('[WorkspaceStore] Failed to load user data:', error);
+    return null;
+  }
+}
+
+/**
+ * Clear anonymous workspace data after user logs in
+ * 用户登录后清除匿名工作区数据
+ */
+function clearAnonymousData(): void {
+  if (typeof window === 'undefined') return;
+
+  try {
+    const anonymousKey = getStorageKey(null);
+    localStorage.removeItem(anonymousKey);
+  } catch (error) {
+    console.error('[WorkspaceStore] Failed to clear anonymous data:', error);
+  }
+}
 
 // ============================================================================
 // Store Implementation
@@ -144,6 +210,104 @@ export const useStrategyWorkspaceStore = create<WorkspaceStore>()(
   persist(
     immer((set, get) => ({
       ...INITIAL_STATE,
+
+      // ----------------------------------------------------------------------
+      // User Management - for data isolation
+      // 用户管理 - 用于数据隔离
+      // ----------------------------------------------------------------------
+
+      initializeUserSpace: (userId: string) => {
+        const currentUserId = get().userId;
+
+        // Skip if already initialized for the same user
+        // 如果已为同一用户初始化，则跳过
+        if (currentUserId === userId && get().isInitialized) {
+          console.log('[WorkspaceStore] Already initialized for user:', userId);
+          return;
+        }
+
+        console.log('[WorkspaceStore] Initializing user space:', userId);
+
+        // Load user's saved data from localStorage
+        // 从 localStorage 加载用户保存的数据
+        const userData = loadUserWorkspaceData(userId);
+
+        if (userData) {
+          console.log('[WorkspaceStore] Loaded user data from storage');
+
+          // Restore user's workspace
+          // 恢复用户的工作区
+          set((state) => {
+            state.userId = userId;
+            state.isInitialized = true;
+
+            if (userData.current) {
+              state.current = {
+                ...INITIAL_WORKSPACE,
+                ...userData.current,
+                // Restore Date objects
+                lastModified: new Date(userData.current.lastModified || Date.now()),
+                lastSavedAt: userData.current.lastSavedAt
+                  ? new Date(userData.current.lastSavedAt)
+                  : undefined,
+                // Restore Set from Array
+                modifiedParams: new Set(
+                  Array.isArray(userData.current.modifiedParams)
+                    ? userData.current.modifiedParams as unknown as string[]
+                    : []
+                ),
+              };
+            }
+
+            if (userData.drafts) {
+              state.drafts = userData.drafts.map((d: any) => ({
+                ...d,
+                timestamp: new Date(d.timestamp),
+                workspace: {
+                  ...d.workspace,
+                  lastModified: new Date(d.workspace.lastModified),
+                  modifiedParams: new Set(
+                    Array.isArray(d.workspace.modifiedParams)
+                      ? d.workspace.modifiedParams as unknown as string[]
+                      : []
+                  ),
+                },
+              }));
+            }
+
+            state.autoSaveEnabled = userData.autoSaveEnabled ?? true;
+            state.autoSaveInterval = userData.autoSaveInterval ?? 3;
+          });
+        } else {
+          // No saved data, initialize fresh workspace for user
+          // 无保存的数据，为用户初始化新的工作区
+          console.log('[WorkspaceStore] No saved data, initializing fresh workspace');
+          set((state) => {
+            state.userId = userId;
+            state.isInitialized = true;
+            state.current = { ...INITIAL_WORKSPACE };
+            state.drafts = [];
+          });
+        }
+
+        // Clear anonymous data after login
+        // 登录后清除匿名数据
+        clearAnonymousData();
+      },
+
+      clearUserSpace: () => {
+        console.log('[WorkspaceStore] Clearing user space');
+        set((state) => {
+          state.userId = null;
+          state.isInitialized = false;
+          state.current = { ...INITIAL_WORKSPACE };
+          state.drafts = [];
+        });
+      },
+
+      getCurrentUserId: () => {
+        return get().userId;
+      },
 
       // ----------------------------------------------------------------------
       // Workspace Updates
@@ -316,8 +480,47 @@ export const useStrategyWorkspaceStore = create<WorkspaceStore>()(
     })),
     {
       name: 'gushen-strategy-workspace',
-      storage: createJSONStorage(() => localStorage),
+      // Custom storage that handles user-scoped keys
+      // 自定义存储，处理用户范围的键
+      storage: {
+        getItem: (name: string) => {
+          if (typeof window === 'undefined') return null;
+
+          // Try to get state to determine userId
+          // 尝试获取状态以确定 userId
+          const state = useStrategyWorkspaceStore.getState?.();
+          const userId = state?.userId;
+          const key = getStorageKey(userId);
+
+          const value = localStorage.getItem(key);
+          return value ? JSON.parse(value) : null;
+        },
+        setItem: (name: string, value: unknown) => {
+          if (typeof window === 'undefined') return;
+
+          // Get current userId from state
+          // 从状态获取当前用户ID
+          const state = useStrategyWorkspaceStore.getState?.();
+          const userId = state?.userId;
+          const key = getStorageKey(userId);
+
+          localStorage.setItem(key, JSON.stringify(value));
+        },
+        removeItem: (name: string) => {
+          if (typeof window === 'undefined') return;
+
+          // Get current userId from state
+          // 从状态获取当前用户ID
+          const state = useStrategyWorkspaceStore.getState?.();
+          const userId = state?.userId;
+          const key = getStorageKey(userId);
+
+          localStorage.removeItem(key);
+        },
+      },
       partialize: (state) => ({
+        userId: state.userId,
+        isInitialized: state.isInitialized,
         current: {
           ...state.current,
           // Convert Set to Array for serialization
@@ -378,25 +581,35 @@ export const selectIsGenerating = (state: WorkspaceStore) =>
   state.current.isGenerating;
 export const selectIsBacktesting = (state: WorkspaceStore) =>
   state.current.isBacktesting;
+export const selectUserId = (state: WorkspaceStore) => state.userId;
+export const selectIsInitialized = (state: WorkspaceStore) => state.isInitialized;
 
 // ============================================================================
 // Multi-tab Synchronization
 // ============================================================================
 
 // Listen to storage events for cross-tab sync
+// 监听存储事件以实现跨标签同步
 if (typeof window !== 'undefined') {
   window.addEventListener('storage', (e) => {
-    if (e.key === 'gushen-strategy-workspace' && e.newValue) {
+    // Get current userId to check if this is our data
+    // 获取当前用户ID以检查这是否是我们的数据
+    const currentState = useStrategyWorkspaceStore.getState();
+    const currentUserId = currentState.userId;
+    const expectedKey = getStorageKey(currentUserId);
+
+    // Only sync if the key matches our user's data
+    // 仅当键匹配我们用户的数据时才同步
+    if (e.key === expectedKey && e.newValue) {
       try {
         const newState = JSON.parse(e.newValue);
-        // Only update if the timestamp is newer
-        const currentState = useStrategyWorkspaceStore.getState();
         const newTimestamp = new Date(newState.state?.current?.lastModified);
         const currentTimestamp = currentState.current.lastModified;
 
         if (newTimestamp > currentTimestamp) {
           // Another tab has newer data, sync it
-          console.log('[WorkspaceStore] Syncing from another tab');
+          // 另一个标签有更新的数据，同步它
+          console.log('[WorkspaceStore] Syncing from another tab for user:', currentUserId);
           useStrategyWorkspaceStore.setState(newState.state);
         }
       } catch (error) {

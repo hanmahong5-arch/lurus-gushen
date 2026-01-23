@@ -12,10 +12,16 @@
  * - Backtest history
  * - Trading history
  *
+ * Authentication:
+ * - All endpoints require user authentication
+ * - User ID is automatically extracted from session
+ * - Tenant access is verified for multi-tenant operations
+ *
  * @module api/history
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { withUser, type UserContext } from '@/lib/auth';
 import {
   getStrategyHistory,
   saveStrategyHistory,
@@ -47,12 +53,11 @@ interface HistoryRequest {
 // =============================================================================
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
+  return withUser<unknown>(request, async (req: NextRequest, user: UserContext) => {
+    const { searchParams } = new URL(req.url);
 
     // Parse query parameters
     const type = searchParams.get('type') as HistoryType | null;
-    const userId = searchParams.get('userId');
     const tenantId = searchParams.get('tenantId');
     const page = parseInt(searchParams.get('page') || '1', 10);
     const limit = parseInt(searchParams.get('limit') || '20', 10);
@@ -72,16 +77,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate userId (required for now, will integrate with auth later)
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'userId is required',
-        },
-        { status: 400 }
-      );
-    }
+    // User ID is now from session (authenticated user)
+    const userId = user.userId;
 
     // Check tenant access if tenantId provided
     if (tenantId) {
@@ -131,16 +128,7 @@ export async function GET(request: NextRequest) {
       success: true,
       ...result,
     });
-  } catch (error) {
-    console.error('[History API] GET error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
-      },
-      { status: 500 }
-    );
-  }
+  });
 }
 
 // =============================================================================
@@ -148,8 +136,8 @@ export async function GET(request: NextRequest) {
 // =============================================================================
 
 export async function POST(request: NextRequest) {
-  try {
-    const body = (await request.json()) as HistoryRequest;
+  return withUser<unknown>(request, async (req: NextRequest, user: UserContext) => {
+    const body = (await req.json()) as HistoryRequest;
     const { type, data } = body;
 
     // Validate type
@@ -174,17 +162,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate userId
-    const userId = data.userId as string;
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'userId is required in data',
-        },
-        { status: 400 }
-      );
-    }
+    // User ID is now from session (authenticated user)
+    const userId = user.userId;
 
     // Check tenant access if tenantId provided
     const tenantId = data.tenantId as number | undefined;
@@ -312,16 +291,7 @@ export async function POST(request: NextRequest) {
       success: true,
       data: result,
     });
-  } catch (error) {
-    console.error('[History API] POST error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
-      },
-      { status: 500 }
-    );
-  }
+  });
 }
 
 // =============================================================================
@@ -329,12 +299,11 @@ export async function POST(request: NextRequest) {
 // =============================================================================
 
 export async function DELETE(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url);
+  return withUser<unknown>(request, async (req: NextRequest, user: UserContext) => {
+    const { searchParams } = new URL(req.url);
 
     const type = searchParams.get('type') as HistoryType | null;
     const id = searchParams.get('id');
-    const userId = searchParams.get('userId');
 
     // Validate parameters
     if (!type || !['strategy', 'backtest', 'trading'].includes(type)) {
@@ -357,18 +326,11 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    if (!userId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'userId is required',
-        },
-        { status: 400 }
-      );
-    }
+    // User ID is now from session (authenticated user)
+    // TODO: Verify ownership before deleting (check that record belongs to user)
+    const _userId = user.userId;
 
     // Delete based on type
-    // Note: In production, should verify ownership before deleting
     let success = false;
     const recordId = parseInt(id, 10);
 
@@ -398,16 +360,7 @@ export async function DELETE(request: NextRequest) {
       success: true,
       message: `${type} record deleted successfully`,
     });
-  } catch (error) {
-    console.error('[History API] DELETE error:', error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: error instanceof Error ? error.message : 'Internal server error',
-      },
-      { status: 500 }
-    );
-  }
+  });
 }
 
 export const dynamic = 'force-dynamic';

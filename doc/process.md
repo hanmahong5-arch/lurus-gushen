@@ -3,7 +3,123 @@
 本文档记录GuShen量化交易平台的所有开发进度、功能修改和问题修复。
 This document tracks all development progress, feature modifications, and bug fixes for the GuShen quantitative trading platform.
 
+---
 
+## 2026-01-23 Phase 4: 仪表板统一与交易面板增强 | Dashboard Unification & Trading Panel Enhancement
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+
+### 用户需求 | User Requirements
+
+完成平台升级计划中的 Phase 4，统一所有仪表板页面的用户状态显示，并增强交易面板功能：
+1. 将 Trading Page 和 History Page 集成统一的 DashboardHeader
+2. 在交易面板集成五档行情 (OrderbookPanel) 和技术指标面板 (IndicatorQuickPanel)
+3. 修复类型错误确保代码质量
+
+Complete Phase 4 of the platform upgrade plan, unifying user status display across all dashboard pages and enhancing trading panel:
+1. Integrate unified DashboardHeader into Trading Page and History Page
+2. Integrate OrderbookPanel and IndicatorQuickPanel into Trading Panel
+3. Fix type errors to ensure code quality
+
+### 修改文件 | Modified Files
+
+#### Trading Page 交易面板
+**File | 文件**: `gushen-web/src/app/dashboard/trading/page.tsx`
+
+**变更 | Changes**:
+- ✅ 替换自定义 header 为统一的 `DashboardHeader` 组件
+- ✅ 导入 `DashboardHeader` 组件
+- ✅ 在底部右侧区域集成 `OrderbookPanel`（五档行情）
+- ✅ 在底部右侧区域集成 `IndicatorQuickPanel`（技术指标，紧凑模式）
+- ✅ 支持点击五档行情价格自动填入订单价格
+
+**新增功能 | New Features**:
+```
+交易面板底部右侧
+├── OrderbookPanel (五档行情)
+│   ├── 5档买盘
+│   ├── 价差显示
+│   └── 5档卖盘
+├── IndicatorQuickPanel (技术指标，紧凑模式)
+│   ├── 趋势指标 (MA, MACD)
+│   └── 动量指标 (RSI, KDJ)
+└── DataStatusPanel (数据状态)
+```
+
+#### History Page 历史记录页面
+**File | 文件**: `gushen-web/src/app/dashboard/history/page.tsx`
+
+**变更 | Changes**:
+- ✅ 替换自定义 header 为统一的 `DashboardHeader` 组件
+- ✅ 移除 `Link` 导入（不再需要手动导航链接）
+- ✅ 更新 `useEffect` 依赖（移除未使用的导入）
+- ✅ 将背景颜色改为语义化类 `bg-background`
+
+#### API 类型修复
+**File | 文件**: `gushen-web/src/app/api/history/backtests/route.ts`
+
+**变更 | Changes**:
+- ✅ 修复 `stats` 变量类型推断问题
+- ✅ 添加 `defaultStats` 默认值定义（使用显式类型）
+- ✅ 使用空值合并操作符确保类型安全
+
+### 已实现的组件 | Implemented Components
+
+#### OrderbookPanel 五档行情组件
+**File | 文件**: `gushen-web/src/components/trading/orderbook-panel.tsx`
+
+**功能 | Features**:
+- 显示5档买盘和5档卖盘
+- 实时价差计算
+- 点击价格可自动填入订单
+- 模拟数据生成（演示用）
+- 定时刷新（每秒更新）
+
+#### IndicatorQuickPanel 技术指标面板
+**File | 文件**: `gushen-web/src/components/trading/indicator-quick-panel.tsx`
+
+**功能 | Features**:
+- 趋势指标：MA（均线系统）、MACD
+- 动量指标：RSI(14)、KDJ
+- 波动率指标：布林带、ATR
+- 信号汇总：看涨/中性/看跌计数
+- 支持紧凑模式和完整模式
+- 30秒自动刷新
+
+#### DashboardHeader 仪表板头部
+**File | 文件**: `gushen-web/src/components/dashboard/dashboard-header.tsx`
+
+**功能 | Features**:
+- 显示用户头像和名称
+- 角色标签（免费版/标准版/专业版）
+- 导航标签页（策略编辑器、策略验证、投资顾问、交易面板、历史记录）
+- 登录/登出按钮
+- 响应式设计
+
+### 验证结果 | Verification
+
+```bash
+$ bun run typecheck
+$ tsc --noEmit
+# ✅ 无错误，类型检查通过
+```
+
+### 代码统计 | Code Statistics
+
+- **修改文件数**: 3个
+- **修改代码行数**: ~100行
+- **新增功能**: 交易面板集成五档行情和技术指标
+
+### 关键文件 | Critical Files
+
+1. `gushen-web/src/app/dashboard/trading/page.tsx` - 交易面板主页面
+2. `gushen-web/src/app/dashboard/history/page.tsx` - 历史记录页面
+3. `gushen-web/src/app/api/history/backtests/route.ts` - 回测历史API
+4. `gushen-web/src/components/dashboard/dashboard-header.tsx` - 统一头部组件
+5. `gushen-web/src/components/trading/orderbook-panel.tsx` - 五档行情组件
+6. `gushen-web/src/components/trading/indicator-quick-panel.tsx` - 技术指标组件
+
+---
 
 ### Future Enhancements | 未来增强
 
@@ -466,6 +582,181 @@ class LayeredCacheManager<T> {
    - 明确每周交付物
    - 记录所有变更到 process.md
 
+
+## 2026-01-23 Phase 2 & 3: 用户系统与LangGraphJS Agent集成 | User System & LangGraphJS Agent Integration
+**Date | 日期**: 2026-01-23
+**Status | 状态**: ✅ Completed | 已完成
+
+### 用户需求 | User Requirements
+
+实现完整的用户系统账户隔离和 LangGraphJS Agent 框架集成：
+1. **Phase 2**: 用户认证中间件、Zustand Store 用户隔离、Dashboard Header、API 端点认证
+2. **Phase 3**: LangGraphJS 依赖安装、LangChain Tools 实现、Advisor Graph、Agent Protocol API
+
+Implement complete user system account isolation and LangGraphJS Agent framework integration:
+1. **Phase 2**: User auth middleware, Zustand Store user isolation, Dashboard Header, API endpoint auth
+2. **Phase 3**: LangGraphJS dependency installation, LangChain Tools, Advisor Graph, Agent Protocol API
+
+### Phase 2: 用户系统与账户隔离 | User System & Account Isolation
+
+#### 新增文件 | New Files
+
+1. **`gushen-web/src/lib/auth/with-user.ts`** (~400行)
+   - `withUser<T>()` - 认证中间件，验证用户登录
+   - `withOptionalUser<T>()` - 可选认证中间件
+   - `withRole<T>()` - 角色验证中间件
+   - `getUserScopedKey()` - 生成用户隔离的 localStorage 键
+   - `parseUserScopedKey()` - 解析用户隔离的键
+   - `clearUserData()` - 清除用户数据
+
+2. **`gushen-web/src/components/dashboard/dashboard-header.tsx`** (~200行)
+   - 显示用户头像、名称、角色
+   - 角色标签（免费版/标准版/专业版）
+   - 登出按钮
+   - 响应式设计
+
+#### 修改文件 | Modified Files
+
+1. **`gushen-web/src/lib/db/schema.ts`**
+   - 添加 5 个用户相关表：users, userStrategies, userBacktests, userDrafts, userPreferences
+   - 添加索引优化查询性能
+
+2. **`gushen-web/src/app/api/history/route.ts`**
+   - 集成 `withUser` 中间件
+   - 所有操作验证用户身份
+   - 用户只能访问自己的数据
+
+3. **`gushen-web/src/app/api/backtest/route.ts`**
+   - 集成 `withOptionalUser` 中间件
+   - 支持匿名回测和认证回测
+   - 认证用户的回测结果会记录日志
+
+### Phase 3: LangGraphJS Agent 框架 | LangGraphJS Agent Framework
+
+#### 依赖安装 | Dependencies Installed
+
+```bash
+bun add @langchain/langgraph@0.2.38 langchain@0.3.17 @langchain/core@0.3.26 @langchain/openai@0.3.17
+```
+
+#### 新增文件 | New Files
+
+**LangGraph 核心文件 | LangGraph Core Files**
+
+1. **`gushen-web/src/lib/agent/graphs/types.ts`** (~420行)
+   - `AdvisorGraphState` - 顾问 Graph 状态
+   - `DataPipelineState` - 数据管道状态
+   - `AgentAnalysis`, `DebateArgument`, `DebateConclusion` - 分析结果类型
+   - `RunStatus`, `ThreadState`, `RunResult`, `MemoryItem` - Agent Protocol 类型
+   - `createDefaultAdvisorState()`, `createDefaultDataPipelineState()` - 状态工厂
+
+2. **`gushen-web/src/lib/agent/graphs/advisor-graph.ts`** (~740行)
+   - 使用 `Annotation.Root` 定义状态（LangGraphJS 0.2.x API）
+   - 6 个节点：router, quick_analyst, deep_analyst, bull_researcher, bear_researcher, moderator
+   - 支持 4 种模式：quick（快速）、deep（深度）、debate（辩论）、diagnose（诊断）
+   - 条件边路由逻辑
+   - DeepSeek API 集成
+
+3. **`gushen-web/src/lib/agent/tools/market-tools.ts`** (~280行)
+   - `fetchKLinesTool` - 获取 K 线数据（数据库优先，API 降级）
+   - `checkDataAvailabilityTool` - 检查数据可用性
+   - `getMarketQuoteTool` - 获取实时行情
+   - `getMarketIndicesTool` - 获取市场指数
+   - `searchStocksTool` - 股票搜索
+
+4. **`gushen-web/src/lib/agent/tools/indicator-tools.ts`** (~550行)
+   - `calculateIndicatorsTool` - 计算技术指标（MA, EMA, MACD, RSI, Bollinger Bands）
+   - `analyzeTrendTool` - 趋势分析（均线交叉、金叉死叉）
+   - `generateSignalTool` - 生成交易信号（强烈买入/买入/中性/卖出/强烈卖出）
+
+5. **`gushen-web/src/lib/agent/index.ts`** (~80行)
+   - 统一导出所有 Agent 模块
+
+**Agent Protocol API 路由 | Agent Protocol API Routes**
+
+6. **`gushen-web/src/app/api/agent-protocol/runs/route.ts`** (~200行)
+   - `POST /api/agent-protocol/runs` - 创建并执行单次运行
+   - `GET /api/agent-protocol/runs` - 列出最近运行记录
+
+7. **`gushen-web/src/app/api/agent-protocol/runs/stream/route.ts`** (~200行)
+   - `POST /api/agent-protocol/runs/stream` - 流式执行（SSE）
+   - 实时推送节点更新、分析结果
+
+8. **`gushen-web/src/app/api/agent-protocol/threads/route.ts`** (~120行)
+   - `POST /api/agent-protocol/threads` - 创建会话线程
+   - `GET /api/agent-protocol/threads` - 列出会话
+   - `DELETE /api/agent-protocol/threads` - 清除所有会话
+
+9. **`gushen-web/src/app/api/agent-protocol/threads/[id]/route.ts`** (~130行)
+   - `GET /api/agent-protocol/threads/[id]` - 获取会话详情
+   - `PATCH /api/agent-protocol/threads/[id]` - 更新会话
+   - `DELETE /api/agent-protocol/threads/[id]` - 删除会话
+
+10. **`gushen-web/src/app/api/agent-protocol/threads/[id]/runs/route.ts`** (~200行)
+    - `POST /api/agent-protocol/threads/[id]/runs` - 在会话中创建运行（多轮对话）
+    - `GET /api/agent-protocol/threads/[id]/runs` - 列出会话中的运行
+
+11. **`gushen-web/src/app/api/agent-protocol/store/items/route.ts`** (~300行)
+    - `PUT /api/agent-protocol/store/items` - 创建/更新记忆项
+    - `GET /api/agent-protocol/store/items` - 获取记忆项
+    - `POST /api/agent-protocol/store/items` - 搜索记忆项
+    - `DELETE /api/agent-protocol/store/items` - 删除记忆项
+
+### Agent Protocol API 设计 | Agent Protocol API Design
+
+```
+Agent Protocol API 结构
+├── /runs          - 无状态单次执行
+│   ├── POST /runs      - 创建并等待结果
+│   └── POST /runs/stream  - 创建并流式输出
+├── /threads       - 多轮对话管理
+│   ├── POST /threads        - 创建会话
+│   ├── GET /threads/{id}    - 获取会话状态
+│   ├── POST /threads/{id}/runs  - 在会话中创建运行
+│   └── GET /threads/{id}/runs   - 获取会话历史
+└── /store         - 长期记忆
+    ├── PUT /store/items     - 创建/更新记忆
+    ├── GET /store/items     - 获取记忆
+    ├── POST /store/items    - 搜索记忆
+    └── DELETE /store/items  - 删除记忆
+```
+
+### 技术亮点 | Technical Highlights
+
+1. **LangGraphJS 0.2.38 Annotation API**
+   - 使用 `Annotation.Root` 定义状态，替代旧版 channels 模式
+   - 方法链式 API 构建 Graph
+
+2. **DeepSeek API 集成**
+   - 通过 `@langchain/openai` 的 `ChatOpenAI` 类
+   - 配置自定义 baseURL 指向 DeepSeek
+
+3. **流式输出 (SSE)**
+   - 使用 TransformStream 实现 Server-Sent Events
+   - 实时推送节点更新和分析结果
+
+4. **多轮对话状态管理**
+   - 会话线程保存上下文
+   - 历史消息自动注入新运行
+
+5. **内存存储（演示用）**
+   - 使用 Map 存储运行、会话、记忆
+   - 生产环境应改用 Redis/PostgreSQL
+
+### 验证结果 | Verification
+
+- ✅ TypeScript 类型检查通过
+- ✅ LangGraphJS 依赖安装成功
+- ✅ 所有 API 路由类型正确
+- ✅ 用户认证中间件工作正常
+
+### 代码统计 | Code Statistics
+
+- **新增代码行数**: ~3,500行
+- **新增文件数**: 15个
+- **修改文件数**: 4个
+
+---
 
 ## 2026-01-23 UI/UX 大改版部署 v19 | UI/UX Overhaul Deployment v19
 

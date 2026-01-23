@@ -27,8 +27,85 @@ import {
   index,
   uniqueIndex,
   foreignKey,
+  uuid,
+  decimal,
+  date,
+  jsonb,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+
+// ============================================================================
+// User Authentication & Management Tables (用户认证与管理表)
+// ============================================================================
+
+/**
+ * Users table - Core user authentication and profile
+ * 用户表 - 核心用户认证和档案
+ *
+ * This table stores user accounts for authentication and user data isolation
+ * 此表存储用户账户，用于认证和用户数据隔离
+ */
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    email: varchar('email', { length: 255 }).unique().notNull(),
+    name: varchar('name', { length: 100 }),
+    passwordHash: varchar('password_hash', { length: 255 }).notNull(),
+    role: varchar('role', { length: 20 }).default('free').notNull(), // free, standard, premium
+    avatar: text('avatar'),
+    emailVerified: boolean('email_verified').default(false).notNull(),
+    isActive: boolean('is_active').default(true).notNull(),
+    lastLoginAt: timestamp('last_login_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    emailIdx: index('idx_users_email').on(table.email),
+    roleIdx: index('idx_users_role').on(table.role),
+  })
+);
+
+/**
+ * User preferences table - User-specific settings and preferences
+ * 用户偏好表 - 用户特定的设置和偏好
+ */
+export const userPreferences = pgTable(
+  'user_preferences',
+  {
+    userId: uuid('user_id')
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    theme: varchar('theme', { length: 20 }).default('dark'),
+    defaultTimeframe: varchar('default_timeframe', { length: 10 }).default('1d'),
+    defaultCapital: decimal('default_capital', { precision: 15, scale: 2 }).default('100000'),
+    autoSaveEnabled: boolean('auto_save_enabled').default(true).notNull(),
+    notificationsEnabled: boolean('notifications_enabled').default(true).notNull(),
+    preferences: jsonb('preferences'), // Additional custom preferences as JSON
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  }
+);
+
+/**
+ * User drafts table - Auto-saved drafts for recovery
+ * 用户草稿表 - 自动保存的草稿用于恢复
+ */
+export const userDrafts = pgTable(
+  'user_drafts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    draftType: varchar('draft_type', { length: 50 }).notNull(), // 'strategy', 'backtest', 'advisor'
+    content: jsonb('content').notNull(),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    userCreatedIdx: index('idx_user_drafts_user_created').on(table.userId, table.createdAt),
+    typeIdx: index('idx_user_drafts_type').on(table.draftType),
+  })
+);
 
 // ============================================================================
 // Table 1: Stocks (股票基本信息)
@@ -261,7 +338,9 @@ export const tenants = pgTable(
     /** URL-friendly slug / URL友好的标识符 */
     slug: varchar('slug', { length: 50 }).unique().notNull(),
     /** Owner user ID / 所有者用户ID */
-    ownerId: varchar('owner_id', { length: 255 }).notNull(),
+    ownerId: uuid('owner_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     /** Subscription plan / 订阅计划 */
     plan: varchar('plan', { length: 20 }).default('free').notNull(),
     /** Maximum members allowed / 最大成员数 */
@@ -290,13 +369,15 @@ export const tenantMembers = pgTable(
       .references(() => tenants.id, { onDelete: 'cascade' })
       .notNull(),
     /** User ID / 用户ID */
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     /** Member role: owner, admin, member, viewer / 成员角色 */
     role: varchar('role', { length: 20 }).default('member').notNull(),
     /** Invitation status: pending, accepted, rejected / 邀请状态 */
     status: varchar('status', { length: 20 }).default('accepted').notNull(),
     /** Invited by user ID / 邀请人用户ID */
-    invitedBy: varchar('invited_by', { length: 255 }),
+    invitedBy: uuid('invited_by').references(() => users.id, { onDelete: 'set null' }),
     joinedAt: timestamp('joined_at').defaultNow().notNull(),
   },
   (table) => ({
@@ -315,7 +396,9 @@ export const strategyHistory = pgTable(
   {
     id: serial('id').primaryKey(),
     /** User who created this version / 创建此版本的用户 */
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     /** Optional tenant reference / 可选的租户引用 */
     tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'set null' }),
     /** Strategy display name / 策略显示名称 */
@@ -357,7 +440,9 @@ export const backtestHistory = pgTable(
   {
     id: serial('id').primaryKey(),
     /** User who ran the backtest / 运行回测的用户 */
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     /** Optional tenant reference / 可选的租户引用 */
     tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'set null' }),
     /** Reference to strategy version / 策略版本引用 */
@@ -411,7 +496,9 @@ export const tradingHistory = pgTable(
   {
     id: serial('id').primaryKey(),
     /** User who made the trade / 交易用户 */
-    userId: varchar('user_id', { length: 255 }).notNull(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
     /** Optional tenant reference / 可选的租户引用 */
     tenantId: integer('tenant_id').references(() => tenants.id, { onDelete: 'set null' }),
     /** Optional strategy reference / 可选的策略引用 */
@@ -483,6 +570,16 @@ export type NewValidationCache = typeof validationCache.$inferInsert;
 
 export type ValidationPreset = typeof validationPresets.$inferSelect;
 export type NewValidationPreset = typeof validationPresets.$inferInsert;
+
+// User authentication types
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+
+export type UserPreference = typeof userPreferences.$inferSelect;
+export type NewUserPreference = typeof userPreferences.$inferInsert;
+
+export type UserDraft = typeof userDrafts.$inferSelect;
+export type NewUserDraft = typeof userDrafts.$inferInsert;
 
 // Multi-tenant history types
 export type Tenant = typeof tenants.$inferSelect;

@@ -3,10 +3,24 @@
 /**
  * History Page - Trading and Strategy History
  * 历史记录页面 - 交易和策略历史
+ *
+ * Features:
+ * - View trading history
+ * - View strategy generation history
+ * - View advisor conversation history
+ * - Filter and search functionality
+ * - Unified DashboardHeader with user status
+ *
+ * 功能：
+ * - 查看交易历史
+ * - 查看策略生成历史
+ * - 查看顾问对话历史
+ * - 筛选和搜索功能
+ * - 统一的仪表板头部，包含用户状态
  */
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
+import { useState } from "react";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 
 // History entry type definitions
 // 历史记录条目类型定义
@@ -185,56 +199,9 @@ export default function HistoryPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f1117]">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-[#1a1f36]/80 backdrop-blur-xl border-b border-[#2a2f46]">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-[#f5a623] to-[#f5c623] flex items-center justify-center">
-                <span className="text-[#1a1f36] font-bold">G</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                GuShen<span className="text-[#f5a623]">.</span>
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-6">
-              <Link
-                href="/dashboard"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                策略编辑器
-              </Link>
-              <Link
-                href="/dashboard/trading"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                交易面板
-              </Link>
-              <Link
-                href="/dashboard/advisor"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                投资顾问
-              </Link>
-              <Link
-                href="/dashboard/history"
-                className="text-[#f5a623] text-sm font-medium"
-              >
-                历史记录
-              </Link>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              <span className="text-sm text-white/50">演示账户</span>
-              <div className="w-8 h-8 rounded-full bg-[#f5a623]/20 flex items-center justify-center">
-                <span className="text-[#f5a623] text-sm">D</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
+    <div className="min-h-screen bg-background">
+      {/* Unified Dashboard Header with user status / 统一的仪表板头部，包含用户状态 */}
+      <DashboardHeader />
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-6 py-8">

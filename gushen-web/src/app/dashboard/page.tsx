@@ -11,7 +11,9 @@ import { AutoSaveIndicator } from "@/components/strategy-editor/auto-save-indica
 import { DraftHistoryPanel } from "@/components/strategy-editor/draft-history-panel";
 import { StrategyGuideCard } from "@/components/strategy-editor/strategy-guide-card";
 import { AIStrategyAssistant } from "@/components/strategy-editor/ai-strategy-assistant";
+import { DashboardHeader } from "@/components/dashboard/dashboard-header";
 import { parseStrategyParameters, updateParameterInCode } from "@/lib/strategy/parameter-parser";
+import { useUserWorkspace } from "@/hooks/use-user-workspace";
 import {
   useStrategyWorkspaceStore,
   selectWorkspace,
@@ -24,6 +26,10 @@ import {
 } from "@/lib/stores/strategy-workspace-store";
 
 export default function DashboardPage() {
+  // ✨ Initialize user workspace for data isolation
+  // 为数据隔离初始化用户工作空间
+  const { isReady, user } = useUserWorkspace();
+
   // ✨ Use Zustand store instead of useState for persistent state
   // 使用Zustand store替代useState以实现持久化状态
   const workspace = useStrategyWorkspaceStore(selectWorkspace);
@@ -275,73 +281,31 @@ export default function DashboardPage() {
     [generatedCode, updateGeneratedCode, markAsUnsaved, handleRerunBacktest]
   );
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center justify-between h-14">
-            <Link href="/" className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-accent to-accent-400 flex items-center justify-center">
-                <span className="text-primary-600 font-bold">G</span>
-              </div>
-              <span className="text-lg font-bold text-white">
-                GuShen<span className="text-accent">.</span>
-              </span>
-            </Link>
-
-            <nav className="flex items-center gap-6">
-              <Link
-                href="/dashboard"
-                className="text-accent text-sm font-medium"
-              >
-                策略编辑器
-              </Link>
-              <Link
-                href="/dashboard/strategy-validation"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                策略验证
-              </Link>
-              <Link
-                href="/dashboard/advisor"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                投资顾问
-              </Link>
-              <Link
-                href="/dashboard/trading"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                交易面板
-              </Link>
-              <Link
-                href="/dashboard/history"
-                className="text-white/60 hover:text-white text-sm transition"
-              >
-                历史记录
-              </Link>
-            </nav>
-
-            <div className="flex items-center gap-3">
-              {/* ✨ Auto-save indicator / 自动保存指示器 */}
-              <AutoSaveIndicator
-                status={autoSaveStatus}
-                lastSavedAt={workspace.lastSavedAt}
-                onClick={() => {
-                  if (autoSaveStatus === 'error') {
-                    saveDraft();
-                  }
-                }}
-              />
-              <span className="text-sm text-white/50">演示账户</span>
-              <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center">
-                <span className="text-accent text-sm">D</span>
-              </div>
+  // Show loading skeleton while workspace is initializing
+  // 工作空间初始化时显示加载骨架
+  if (!isReady) {
+    return (
+      <div className="min-h-screen bg-background">
+        <div className="sticky top-0 z-50 bg-surface/80 backdrop-blur-xl border-b border-border h-14" />
+        <main className="max-w-7xl mx-auto px-6 py-8">
+          <div className="space-y-6 animate-pulse">
+            <div className="w-64 h-8 bg-surface rounded" />
+            <div className="grid lg:grid-cols-3 gap-6">
+              <div className="h-64 bg-surface rounded-xl" />
+              <div className="h-64 bg-surface rounded-xl" />
+              <div className="h-64 bg-surface rounded-xl" />
             </div>
           </div>
-        </div>
-      </header>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background">
+      {/* Shared Dashboard Header with account status */}
+      {/* 共享仪表板头部，显示账户状态 */}
+      <DashboardHeader />
 
       {/* Main content */}
       <main className="max-w-7xl mx-auto px-6 py-8">
