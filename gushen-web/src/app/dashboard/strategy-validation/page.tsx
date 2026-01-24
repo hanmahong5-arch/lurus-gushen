@@ -72,6 +72,15 @@ export default function StrategyValidationPage() {
   /**
    * Fetch available strategies and sectors on mount
    * 组件挂载时获取可用策略和行业
+   *
+   * API response format (from /api/backtest/sector GET):
+   * {
+   *   success: true,
+   *   data: {
+   *     strategies: [...],
+   *     sectors: { industries: [...], concepts: [...] }
+   *   }
+   * }
    */
   useEffect(() => {
     async function fetchOptions() {
@@ -79,9 +88,29 @@ export default function StrategyValidationPage() {
         const response = await fetch("/api/backtest/sector");
         const data = await response.json();
 
-        if (data.success) {
-          setStrategies(data.strategies ?? []);
-          setSectors(data.sectors ?? []);
+        if (data.success && data.data) {
+          // Access nested data.data structure from API
+          // 访问API返回的嵌套 data.data 结构
+          setStrategies(data.data.strategies ?? []);
+
+          // Flatten industries and concepts into a single sectors array
+          // 将行业和概念板块合并为单一数组
+          const { industries = [], concepts = [] } = data.data.sectors ?? {};
+          const flatSectors: SectorOption[] = [
+            ...industries.map((s: { code: string; name: string; nameEn?: string }) => ({
+              code: s.code,
+              name: s.name,
+              nameEn: s.nameEn,
+              type: "industry" as const,
+            })),
+            ...concepts.map((s: { code: string; name: string; nameEn?: string }) => ({
+              code: s.code,
+              name: s.name,
+              nameEn: s.nameEn,
+              type: "concept" as const,
+            })),
+          ];
+          setSectors(flatSectors);
         } else {
           setError(data.error ?? "Failed to load options");
           // Use fallback data

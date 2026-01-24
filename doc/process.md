@@ -5,6 +5,124 @@ This document tracks all development progress, feature modifications, and bug fi
 
 ---
 
+## 2026-01-24 策略验证页面选择器修复 | Strategy Validation Selector Fix
+**Date | 日期**: 2026-01-24
+**Status | 状态**: ✅ Completed | 已完成
+**Priority | 优先级**: P0 (紧急修复)
+
+### 问题描述 | Problem Description
+
+策略验证页面的策略和板块下拉选择器显示为空。
+The strategy and sector dropdown selectors on the strategy validation page were displaying empty.
+
+**根本原因 | Root Cause**:
+API响应格式与前端期望不匹配：
+API response format did not match frontend expectations:
+
+```typescript
+// API返回格式 | API Response Format
+{
+  success: true,
+  data: {
+    strategies: [...],
+    sectors: { industries: [...], concepts: [...] }
+  }
+}
+
+// 前端期望格式 | Frontend Expected Format
+{
+  success: true,
+  strategies: [...],  // 直接在顶层 | Directly at top level
+  sectors: [...]       // 扁平数组 | Flat array
+}
+```
+
+### 解决方案 | Solution
+
+修改前端代码适配API响应格式：
+Modified frontend code to adapt to API response format:
+
+1. 正确访问嵌套的 `data.data.strategies`
+2. 将 `industries` 和 `concepts` 合并为扁平的 `sectors` 数组
+
+### 修改文件 | Modified Files
+
+**File | 文件**: `gushen-web/src/app/dashboard/strategy-validation/page.tsx`
+
+**变更 | Changes** (第76-132行):
+- ✅ 添加API响应格式注释说明
+- ✅ 修改数据访问路径：`data.strategies` → `data.data.strategies`
+- ✅ 将 `sectors.industries` 和 `sectors.concepts` 合并为扁平数组
+- ✅ 为每个板块添加 `type` 字段（"industry" / "concept"）
+
+**代码示例 | Code Example**:
+```typescript
+if (data.success && data.data) {
+  setStrategies(data.data.strategies ?? []);
+
+  const { industries = [], concepts = [] } = data.data.sectors ?? {};
+  const flatSectors: SectorOption[] = [
+    ...industries.map((s) => ({ ...s, type: "industry" as const })),
+    ...concepts.map((s) => ({ ...s, type: "concept" as const })),
+  ];
+  setSectors(flatSectors);
+}
+```
+
+### 验证结果 | Verification
+
+```bash
+$ bun run typecheck
+# ✅ 无错误，类型检查通过
+```
+
+### 代码统计 | Code Statistics
+
+- **修改文件数**: 1个
+- **修改代码行数**: ~30行
+
+### 关键文件 | Critical Files
+
+1. `gushen-web/src/app/dashboard/strategy-validation/page.tsx` - 策略验证页面
+2. `gushen-web/src/app/api/backtest/sector/route.ts` - 板块回测API (GET handler)
+
+---
+
+## 2026-01-24 平台升级计划文档创建 | Platform Upgrade Plan Document Creation
+**Date | 日期**: 2026-01-24
+**Status | 状态**: ✅ Completed | 已完成
+**Priority | 优先级**: P1 (文档)
+
+### 用户需求 | User Requirements
+
+创建项目计划文档 `doc/plan.md`，记录平台全面升级计划的完成状态。
+Create project plan document `doc/plan.md` to record the completion status of the platform comprehensive upgrade plan.
+
+### 新增文件 | New Files
+
+**File | 文件**: `doc/plan.md` (~250行)
+
+**内容 | Contents**:
+- 执行摘要（核心目标、完成状态）
+- 6个实施阶段详情
+- 技术架构概览
+- 验收标准
+- 关键文件清单
+- 后续规划
+
+### 验证状态摘要 | Verification Status Summary
+
+| 阶段 | 状态 |
+|------|------|
+| Phase 1: Bug修复与快速优化 | ✅ 已完成 |
+| Phase 2: 数据库Schema与用户系统 | ✅ 已完成 |
+| Phase 3: LangGraphJS + Agent Protocol | ✅ 已完成 |
+| Phase 4: 历史记录与交易面板增强 | ✅ 已完成 |
+| Phase 5: 数据采集专项实施 | ✅ 已完成 |
+| Phase 6: 紧急修复 v1.2.1 | ✅ 已完成 |
+
+---
+
 ## 2026-01-23 Phase 2: Dashboard账户状态统一 | Dashboard Account Status Unification
 **Date | 日期**: 2026-01-23
 **Status | 状态**: ✅ Completed | 已完成
