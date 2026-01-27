@@ -2,13 +2,17 @@
  * Sector Backtest API
  * 行业回测API
  *
- * POST /api/backtest/sector
+ * GET /api/backtest/sector - Returns available strategies (builtin + user) and sectors
+ * POST /api/backtest/sector - Validates strategy performance across all stocks in a sector.
  *
- * Validates strategy performance across all stocks in a sector.
  * 验证策略在行业内所有股票的表现
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth/auth";
+import { db, strategyHistory } from "@/lib/db";
+import { eq, and, desc } from "drizzle-orm";
 import {
   getSectorStocks,
   getSectorIndexKline,
@@ -579,17 +583,65 @@ export async function POST(request: NextRequest) {
 }
 
 /**
- * GET handler - returns available strategies and sectors
- * GET处理 - 返回可用策略和板块
+ * GET handler - returns available strategies (builtin + user) and sectors
+ * GET处理 - 返回可用策略（预定义 + 用户）和板块
  */
 export async function GET() {
   const { SW_SECTORS, CONCEPT_SECTORS } =
     await import("@/lib/data-service/sources/eastmoney-sector");
 
+  // Get builtin strategies
+  const builtinStrategies = getAvailableStrategies().map((s) => ({
+    ...s,
+    type: 'builtin' as const,
+  }));
+
+  // Get user strategies if logged in
+  let userStrategies: Array<{
+    id: string;
+    name: string;
+    description: string;
+    type: 'custom';
+    code?: string;
+    parameters?: Record<string, unknown>;
+  }> = [];
+
+  try {
+    const session = await getServerSession(authOptions);
+
+    if (session?.user?.id) {
+      // Query user strategies from database
+      const userStrategyRecords = await db.query.strategyHistory.findMany({
+        where: and(
+          eq(strategyHistory.userId, session.user.id),
+          eq(strategyHistory.isActive, true)
+        ),
+        orderBy: [desc(strategyHistory.createdAt)],
+        limit: 20, // Limit to 20 most recent strategies
+      });
+
+      // Transform to API format
+      userStrategies = userStrategyRecords.map((s) => ({
+        id: `user:${s.id}`, // Prefix with 'user:' to distinguish from builtin
+        name: s.strategyName,
+        description: s.description || `自定义策略 - ${s.strategyType}`,
+        type: 'custom' as const,
+        code: s.strategyCode,
+        parameters: s.parameters ? JSON.parse(s.parameters) : undefined,
+      }));
+    }
+  } catch (error) {
+    // Log error but don't fail the request - just return without user strategies
+    console.warn('[Backtest/Sector] Failed to fetch user strategies:', error);
+  }
+
   return NextResponse.json({
     success: true,
     data: {
-      strategies: getAvailableStrategies(),
+      strategies: {
+        builtin: builtinStrategies,
+        user: userStrategies,
+      },
       sectors: {
         industries: SW_SECTORS.map((s) => ({
           code: s.code,

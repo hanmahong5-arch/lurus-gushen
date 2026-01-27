@@ -8,6 +8,13 @@
       "when": 1769129352061,
       "tag": "0000_panoramic_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1769416641937,
+      "tag": "0001_narrow_pete_wisdom",
+      "breakpoints": true
     }
   ]
 }

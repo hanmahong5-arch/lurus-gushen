@@ -547,6 +547,213 @@ export const tradingHistory = pgTable(
 );
 
 // ============================================================================
+// Popular Strategy System Tables (流行策略系统)
+// ============================================================================
+
+/**
+ * Popular strategies table - Store crawled popular strategies from various sources
+ * 流行策略表 - 存储从各平台爬取的流行策略
+ *
+ * Sources: GitHub Awesome-Quant, JoinQuant, UQer, XueQiu
+ */
+export const popularStrategies = pgTable(
+  'popular_strategies',
+  {
+    id: serial('id').primaryKey(),
+    /** Source platform / 来源平台 */
+    source: varchar('source', { length: 50 }).notNull(), // github, joinquant, uqer, xueqiu
+    /** Source platform strategy ID / 源平台策略ID */
+    sourceId: varchar('source_id', { length: 100 }).notNull(),
+    /** Strategy name / 策略名称 */
+    name: varchar('name', { length: 200 }).notNull(),
+    /** Strategy description / 策略描述 */
+    description: text('description'),
+    /** Author name / 作者 */
+    author: varchar('author', { length: 100 }),
+
+    // Strategy classification / 策略分类
+    /** Strategy type: trend, mean-revert, momentum, factor, etc. / 策略类型 */
+    strategyType: varchar('strategy_type', { length: 50 }),
+    /** Target markets: stock, futures, crypto / 适用市场 */
+    markets: jsonb('markets').$type<string[]>(),
+    /** Technical indicators used / 使用的技术指标 */
+    indicators: jsonb('indicators').$type<string[]>(),
+
+    // Performance metrics / 性能指标
+    /** Annual return rate / 年化收益率 */
+    annualReturn: decimal('annual_return', { precision: 10, scale: 4 }),
+    /** Maximum drawdown / 最大回撤 */
+    maxDrawdown: decimal('max_drawdown', { precision: 10, scale: 4 }),
+    /** Sharpe ratio / 夏普比率 */
+    sharpeRatio: decimal('sharpe_ratio', { precision: 10, scale: 4 }),
+
+    // Popularity metrics / 流行度指标
+    /** View count / 浏览量 */
+    views: integer('views').default(0).notNull(),
+    /** Like count / 点赞数 */
+    likes: integer('likes').default(0).notNull(),
+    /** Calculated popularity score / 计算的流行度分数 */
+    popularityScore: decimal('popularity_score', { precision: 10, scale: 2 }),
+
+    // Code content / 代码内容
+    /** Original source code / 原始代码 */
+    originalCode: text('original_code'),
+    /** Converted VeighNa code / 转换后的VeighNa代码 */
+    veighnaCode: text('veighna_code'),
+    /** Conversion status: pending, success, failed / 转换状态 */
+    conversionStatus: varchar('conversion_status', { length: 20 }).default('pending'),
+    /** Conversion error message / 转换错误信息 */
+    conversionError: text('conversion_error'),
+
+    // Metadata / 元数据
+    /** Original URL on source platform / 源平台原始链接 */
+    originalUrl: text('original_url'),
+    /** Tags for categorization / 分类标签 */
+    tags: jsonb('tags').$type<string[]>(),
+    /** Is featured/recommended / 是否推荐 */
+    isFeatured: boolean('is_featured').default(false),
+    /** When the strategy was last crawled / 最后爬取时间 */
+    crawledAt: timestamp('crawled_at').defaultNow().notNull(),
+    /** Last update time / 最后更新时间 */
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    sourceIdx: index('idx_popular_strategies_source').on(table.source),
+    sourceIdIdx: uniqueIndex('idx_popular_strategies_source_id').on(table.source, table.sourceId),
+    typeIdx: index('idx_popular_strategies_type').on(table.strategyType),
+    popularityIdx: index('idx_popular_strategies_popularity').on(table.popularityScore),
+    featuredIdx: index('idx_popular_strategies_featured').on(table.isFeatured),
+  })
+);
+
+/**
+ * Strategy crawl log table - Track crawling jobs and their results
+ * 策略爬取日志表 - 记录爬取任务及结果
+ */
+export const strategyCrawlLog = pgTable(
+  'strategy_crawl_log',
+  {
+    id: serial('id').primaryKey(),
+    /** Source platform / 来源平台 */
+    source: varchar('source', { length: 50 }).notNull(),
+    /** Crawl type: daily, full, manual / 爬取类型 */
+    crawlType: varchar('crawl_type', { length: 20 }).notNull(),
+    /** Start time / 开始时间 */
+    startTime: timestamp('start_time').notNull(),
+    /** End time / 结束时间 */
+    endTime: timestamp('end_time'),
+    /** Status: running, success, failed, partial / 状态 */
+    status: varchar('status', { length: 20 }).notNull(),
+    /** Number of strategies found / 发现的策略数 */
+    strategiesFound: integer('strategies_found').default(0).notNull(),
+    /** Number of new strategies added / 新增的策略数 */
+    strategiesNew: integer('strategies_new').default(0).notNull(),
+    /** Number of strategies updated / 更新的策略数 */
+    strategiesUpdated: integer('strategies_updated').default(0).notNull(),
+    /** Error message if failed / 错误信息 */
+    errorMessage: text('error_message'),
+    /** Additional details / 其他详情 */
+    details: jsonb('details'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    sourceIdx: index('idx_strategy_crawl_log_source').on(table.source),
+    statusIdx: index('idx_strategy_crawl_log_status').on(table.status),
+    startTimeIdx: index('idx_strategy_crawl_log_start_time').on(table.startTime),
+  })
+);
+
+// ============================================================================
+// Workflow System Tables (工作流系统)
+// ============================================================================
+
+/**
+ * User workflow sessions table - Track multi-step operation sessions
+ * 用户工作流会话表 - 跟踪多步骤操作会话
+ *
+ * Each session represents a complete workflow (e.g., strategy development)
+ */
+export const userWorkflowSessions = pgTable(
+  'user_workflow_sessions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    /** User ID / 用户ID */
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Workflow type: strategy_dev, backtest_analysis, advisor_chat / 工作流类型 */
+    workflowType: varchar('workflow_type', { length: 50 }).notNull(),
+    /** Session status: active, completed, expired, cancelled / 会话状态 */
+    status: varchar('status', { length: 20 }).default('active').notNull(),
+    /** Current step number (0-indexed) / 当前步骤号 */
+    currentStep: integer('current_step').default(0).notNull(),
+    /** Total steps in workflow / 工作流总步骤数 */
+    totalSteps: integer('total_steps').notNull(),
+    /** Step data snapshots / 每步的数据快照 */
+    stepData: jsonb('step_data'),
+    /** Workflow context/metadata / 工作流上下文 */
+    context: jsonb('context'),
+    /** Session title/label / 会话标题 */
+    title: varchar('title', { length: 200 }),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    /** Expiration time (default 24h) / 过期时间 */
+    expiresAt: timestamp('expires_at').notNull(),
+  },
+  (table) => ({
+    userIdx: index('idx_workflow_sessions_user').on(table.userId),
+    typeIdx: index('idx_workflow_sessions_type').on(table.workflowType),
+    statusIdx: index('idx_workflow_sessions_status').on(table.status),
+    expiresIdx: index('idx_workflow_sessions_expires').on(table.expiresAt),
+  })
+);
+
+/**
+ * Workflow step cache table - Cache results for each workflow step
+ * 工作流步骤缓存表 - 缓存每个工作流步骤的结果
+ *
+ * Enables resuming from any step and avoids re-computation
+ */
+export const workflowStepCache = pgTable(
+  'workflow_step_cache',
+  {
+    id: serial('id').primaryKey(),
+    /** Reference to workflow session / 工作流会话引用 */
+    sessionId: uuid('session_id')
+      .notNull()
+      .references(() => userWorkflowSessions.id, { onDelete: 'cascade' }),
+    /** Step number in the workflow / 工作流中的步骤号 */
+    stepNumber: integer('step_number').notNull(),
+    /** Step type: stock_select, strategy_generate, backtest_run, etc. / 步骤类型 */
+    stepType: varchar('step_type', { length: 50 }).notNull(),
+    /** Input data for this step / 此步骤的输入数据 */
+    inputData: jsonb('input_data'),
+    /** Output data from this step / 此步骤的输出数据 */
+    outputData: jsonb('output_data'),
+    /** Cached result (may include computed values) / 缓存的结果 */
+    cachedResult: jsonb('cached_result'),
+    /** Step status: pending, processing, completed, failed, skipped / 步骤状态 */
+    status: varchar('status', { length: 20 }).default('pending').notNull(),
+    /** Error message if failed / 错误信息 */
+    errorMessage: text('error_message'),
+    /** When step started processing / 开始处理时间 */
+    startedAt: timestamp('started_at'),
+    /** When step completed / 完成时间 */
+    completedAt: timestamp('completed_at'),
+    createdAt: timestamp('created_at').defaultNow().notNull(),
+  },
+  (table) => ({
+    sessionIdx: index('idx_workflow_step_cache_session').on(table.sessionId),
+    stepIdx: index('idx_workflow_step_cache_step').on(table.sessionId, table.stepNumber),
+    statusIdx: index('idx_workflow_step_cache_status').on(table.status),
+    uniqueSessionStep: uniqueIndex('unique_workflow_session_step').on(
+      table.sessionId,
+      table.stepNumber
+    ),
+  })
+);
+
+// ============================================================================
 // Type Exports
 // ============================================================================
 
@@ -596,3 +803,17 @@ export type NewBacktestHistory = typeof backtestHistory.$inferInsert;
 
 export type TradingHistory = typeof tradingHistory.$inferSelect;
 export type NewTradingHistory = typeof tradingHistory.$inferInsert;
+
+// Popular strategy system types
+export type PopularStrategy = typeof popularStrategies.$inferSelect;
+export type NewPopularStrategy = typeof popularStrategies.$inferInsert;
+
+export type StrategyCrawlLog = typeof strategyCrawlLog.$inferSelect;
+export type NewStrategyCrawlLog = typeof strategyCrawlLog.$inferInsert;
+
+// Workflow system types
+export type UserWorkflowSession = typeof userWorkflowSessions.$inferSelect;
+export type NewUserWorkflowSession = typeof userWorkflowSessions.$inferInsert;
+
+export type WorkflowStepCache = typeof workflowStepCache.$inferSelect;
+export type NewWorkflowStepCache = typeof workflowStepCache.$inferInsert;

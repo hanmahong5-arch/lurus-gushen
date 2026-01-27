@@ -89,13 +89,31 @@ export default function StrategyValidationPage() {
         const data = await response.json();
 
         if (data.success && data.data) {
-          // Access nested data.data structure from API
-          // 访问API返回的嵌套 data.data 结构
-          setStrategies(data.data.strategies ?? []);
+          // Handle new grouped strategy format (builtin + user)
+          // 处理新的分组策略格式（预定义 + 用户）
+          const { strategies: strategyData, sectors: sectorData } = data.data;
+
+          // Flatten builtin and user strategies into a single array
+          // 将预定义和用户策略合并为单一数组
+          const builtinStrategies = (strategyData?.builtin ?? []).map(
+            (s: { id: string; name: string; nameEn?: string; description: string }) => ({
+              ...s,
+              type: 'builtin' as const,
+            })
+          );
+          const userStrategies = (strategyData?.user ?? []).map(
+            (s: { id: string; name: string; description: string; code?: string; parameters?: Record<string, unknown> }) => ({
+              ...s,
+              type: 'custom' as const,
+            })
+          );
+
+          // User strategies first, then builtin
+          setStrategies([...userStrategies, ...builtinStrategies]);
 
           // Flatten industries and concepts into a single sectors array
           // 将行业和概念板块合并为单一数组
-          const { industries = [], concepts = [] } = data.data.sectors ?? {};
+          const { industries = [], concepts = [] } = sectorData ?? {};
           const flatSectors: SectorOption[] = [
             ...industries.map((s: { code: string; name: string; nameEn?: string }) => ({
               code: s.code,
@@ -487,42 +505,49 @@ const FALLBACK_STRATEGIES: StrategyOption[] = [
     name: "MACD金叉",
     nameEn: "MACD Golden Cross",
     description: "DIF上穿DEA产生买入信号",
+    type: "builtin",
   },
   {
     id: "macd_death_cross",
     name: "MACD死叉",
     nameEn: "MACD Death Cross",
     description: "DIF下穿DEA产生卖出信号",
+    type: "builtin",
   },
   {
     id: "rsi_oversold",
     name: "RSI超卖",
     nameEn: "RSI Oversold",
     description: "RSI低于30产生买入信号",
+    type: "builtin",
   },
   {
     id: "rsi_overbought",
     name: "RSI超买",
     nameEn: "RSI Overbought",
     description: "RSI高于70产生卖出信号",
+    type: "builtin",
   },
   {
     id: "ma_golden_cross",
     name: "均线金叉",
     nameEn: "MA Golden Cross",
     description: "MA5上穿MA20产生买入信号",
+    type: "builtin",
   },
   {
     id: "boll_lower_break",
     name: "布林带下轨",
     nameEn: "BOLL Lower Break",
     description: "价格触及下轨产生买入信号",
+    type: "builtin",
   },
   {
     id: "volume_breakout",
     name: "放量突破",
     nameEn: "Volume Breakout",
     description: "放量突破20日高点",
+    type: "builtin",
   },
 ];
 
