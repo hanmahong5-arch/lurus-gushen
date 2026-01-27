@@ -8,8 +8,16 @@
  * 在板块选择和个股多选之间切换
  */
 
-import { useState } from "react";
 import { StockMultiSelector } from "./stock-multi-selector";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 // ============================================================================
 // Types
@@ -105,50 +113,99 @@ export function TargetSelector({
 }
 
 // ============================================================================
-// Sector Selector (Simplified version for reference)
+// Sector Selector (Using Shadcn Select for better dark theme support)
 // ============================================================================
 
-interface SectorSelectorProps {
+export interface SectorSelectorProps {
   sectorCode: string;
   onSectorChange: (sectorCode: string) => void;
-  sectors: Array<{ code: string; name: string; nameEn: string }>;
+  sectors: Array<{ code: string; name: string; nameEn: string; type?: 'industry' | 'concept' }>;
 }
 
-function SectorSelector({ sectorCode, onSectorChange, sectors }: SectorSelectorProps) {
+export function SectorSelector({ sectorCode, onSectorChange, sectors }: SectorSelectorProps) {
+  // Separate industries and concepts for grouped display
+  const industries = sectors.filter(s => s.type === 'industry' || !s.type);
+  const concepts = sectors.filter(s => s.type === 'concept');
+
+  // Find selected sector name for display
+  const selectedSector = sectors.find(s => s.code === sectorCode);
+
   return (
     <div className="space-y-3">
       <label className="block text-sm text-gray-300 font-medium">
         选择行业板块 / Select Sector
       </label>
-      <select
-        value={sectorCode}
-        onChange={(e) => onSectorChange(e.target.value)}
-        className="w-full px-4 py-3 bg-gradient-to-br from-white/10 to-white/5
-                 border-2 border-white/20 hover:border-accent/50 rounded-lg
-                 text-white text-sm font-medium focus:ring-2 focus:ring-accent/50
-                 focus:border-accent transition-all cursor-pointer
-                 appearance-none bg-no-repeat bg-right
-                 shadow-lg"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E")`,
-          backgroundPosition: 'right 0.75rem center',
-          backgroundSize: '1.5rem',
-          paddingRight: '3rem',
-        }}
-      >
-        <option value="" className="bg-surface text-white py-2">
-          请选择板块 / Please select
-        </option>
-        {sectors.map((sector) => (
-          <option
-            key={sector.code}
-            value={sector.code}
-            className="bg-surface text-white py-2 hover:bg-white/10"
-          >
-            📊 {sector.name} / {sector.nameEn}
-          </option>
-        ))}
-      </select>
+      <Select value={sectorCode} onValueChange={onSectorChange}>
+        <SelectTrigger
+          className="w-full h-12 px-4 bg-gradient-to-br from-white/10 to-white/5
+                     border-2 border-white/20 hover:border-accent/50 rounded-lg
+                     text-white text-sm font-medium focus:ring-2 focus:ring-accent/50
+                     focus:border-accent transition-all cursor-pointer shadow-lg"
+          data-testid="sector-select"
+        >
+          <SelectValue placeholder="请选择板块 / Please select">
+            {selectedSector && (
+              <span className="flex items-center gap-2">
+                <span>{selectedSector.type === 'concept' ? '💡' : '📊'}</span>
+                <span>{selectedSector.name}</span>
+              </span>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent
+          className="bg-surface border-white/20 max-h-80"
+          position="popper"
+          sideOffset={4}
+        >
+          {/* Industry Sectors Group */}
+          {industries.length > 0 && (
+            <SelectGroup>
+              <SelectLabel className="text-white/50 text-xs px-2 py-1.5">
+                📊 行业板块 / Industries
+              </SelectLabel>
+              {industries.map((sector) => (
+                <SelectItem
+                  key={sector.code}
+                  value={sector.code}
+                  className="text-white hover:bg-white/10 focus:bg-accent/20 focus:text-white cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-white/60">📊</span>
+                    <span>{sector.name}</span>
+                    {sector.nameEn && (
+                      <span className="text-white/40 text-xs">/ {sector.nameEn}</span>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+
+          {/* Concept Sectors Group */}
+          {concepts.length > 0 && (
+            <SelectGroup>
+              <SelectLabel className="text-white/50 text-xs px-2 py-1.5 border-t border-white/10 mt-1 pt-2">
+                💡 概念板块 / Concepts
+              </SelectLabel>
+              {concepts.map((sector) => (
+                <SelectItem
+                  key={sector.code}
+                  value={sector.code}
+                  className="text-white hover:bg-white/10 focus:bg-accent/20 focus:text-white cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-white/60">💡</span>
+                    <span>{sector.name}</span>
+                    {sector.nameEn && (
+                      <span className="text-white/40 text-xs">/ {sector.nameEn}</span>
+                    )}
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+        </SelectContent>
+      </Select>
 
       {sectorCode && (
         <div className="mt-4 p-4 bg-accent/10 border border-accent/30 rounded-lg">

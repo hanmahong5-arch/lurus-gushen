@@ -45,6 +45,14 @@ class MockResizeObserver {
 globalThis.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
 /**
+ * Mock PointerCapture APIs
+ * Required for Radix UI Select and other pointer-based components
+ */
+Element.prototype.hasPointerCapture = vi.fn().mockReturnValue(false);
+Element.prototype.setPointerCapture = vi.fn();
+Element.prototype.releasePointerCapture = vi.fn();
+
+/**
  * Mock IntersectionObserver
  * Required for lazy loading and visibility detection
  */

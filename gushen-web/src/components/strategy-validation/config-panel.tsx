@@ -10,6 +10,15 @@
 
 import { useState, useCallback } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { TargetSelector, SelectionMode } from "./target-selector";
 
 // =============================================================================
@@ -47,8 +56,11 @@ export interface ValidationConfig {
 export interface StrategyOption {
   id: string;
   name: string;
-  nameEn: string;
+  nameEn?: string;
   description: string;
+  type?: 'builtin' | 'custom'; // Strategy type: built-in or user-defined
+  code?: string;               // Custom strategy code
+  parameters?: Record<string, unknown>;
 }
 
 export interface SectorOption {
@@ -111,7 +123,127 @@ function getDefaultDates(days: number = 30): {
 }
 
 // =============================================================================
-// COMPONENT / 组件
+// STRATEGY SELECTOR COMPONENT / 策略选择器组件
+// =============================================================================
+
+interface StrategySelectorProps {
+  strategies: StrategyOption[];
+  selectedStrategy: string;
+  onStrategyChange: (strategyId: string) => void;
+}
+
+/**
+ * Strategy Selector with grouped display (User strategies + Built-in strategies)
+ * 策略选择器，支持分组显示（用户策略 + 预定义策略）
+ */
+export function StrategySelector({
+  strategies,
+  selectedStrategy,
+  onStrategyChange,
+}: StrategySelectorProps) {
+  // Separate user strategies and built-in strategies
+  const userStrategies = strategies.filter(s => s.type === 'custom');
+  const builtinStrategies = strategies.filter(s => s.type !== 'custom');
+
+  // Find currently selected strategy for description display
+  const currentStrategy = strategies.find(s => s.id === selectedStrategy);
+
+  return (
+    <div>
+      <label className="block text-xs font-medium text-white/60 mb-2">
+        📊 选择策略 / Select Strategy
+      </label>
+      <Select value={selectedStrategy} onValueChange={onStrategyChange}>
+        <SelectTrigger
+          className="w-full h-11 px-3 bg-gradient-to-br from-white/10 to-white/5
+                     border-2 border-white/20 hover:border-accent/50 rounded-lg
+                     text-white text-sm font-medium focus:ring-2 focus:ring-accent/50
+                     focus:border-accent shadow-lg transition-all cursor-pointer"
+          data-testid="strategy-select"
+        >
+          <SelectValue placeholder="选择策略 / Select a strategy">
+            {currentStrategy && (
+              <span className="flex items-center gap-2">
+                <span>{currentStrategy.type === 'custom' ? '🎯' : '📈'}</span>
+                <span>{currentStrategy.name}</span>
+                {currentStrategy.nameEn && (
+                  <span className="text-white/40 text-xs hidden sm:inline">
+                    / {currentStrategy.nameEn}
+                  </span>
+                )}
+              </span>
+            )}
+          </SelectValue>
+        </SelectTrigger>
+        <SelectContent
+          className="bg-surface border-white/20 max-h-80"
+          position="popper"
+          sideOffset={4}
+        >
+          {/* User Strategies Group - Show first if available */}
+          {userStrategies.length > 0 && (
+            <SelectGroup>
+              <SelectLabel className="text-accent/80 text-xs px-2 py-1.5 font-medium">
+                🎯 我的策略 / My Strategies
+              </SelectLabel>
+              {userStrategies.map((strategy) => (
+                <SelectItem
+                  key={strategy.id}
+                  value={strategy.id}
+                  className="text-white hover:bg-white/10 focus:bg-accent/20 focus:text-white cursor-pointer"
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="text-accent/60">🎯</span>
+                    <span className="truncate max-w-[200px]">{strategy.name}</span>
+                  </span>
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          )}
+
+          {/* Built-in Strategies Group */}
+          <SelectGroup>
+            <SelectLabel className={`text-white/50 text-xs px-2 py-1.5 ${userStrategies.length > 0 ? 'border-t border-white/10 mt-1 pt-2' : ''}`}>
+              📊 预定义策略 / Built-in Strategies
+            </SelectLabel>
+            {builtinStrategies.map((strategy) => (
+              <SelectItem
+                key={strategy.id}
+                value={strategy.id}
+                className="text-white hover:bg-white/10 focus:bg-accent/20 focus:text-white cursor-pointer"
+              >
+                <span className="flex items-center gap-2">
+                  <span className="text-white/60">📈</span>
+                  <span>{strategy.name}</span>
+                  {strategy.nameEn && (
+                    <span className="text-white/40 text-xs">/ {strategy.nameEn}</span>
+                  )}
+                </span>
+              </SelectItem>
+            ))}
+          </SelectGroup>
+        </SelectContent>
+      </Select>
+
+      {/* Strategy Description */}
+      {currentStrategy && (
+        <div className="mt-2 p-2 bg-white/5 rounded border border-white/10">
+          <p className="text-xs text-white/50">
+            💡 {currentStrategy.description}
+          </p>
+          {currentStrategy.type === 'custom' && (
+            <p className="text-xs text-accent/60 mt-1">
+              ✨ 自定义策略 / Custom Strategy
+            </p>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// =============================================================================
+// CONFIG PANEL COMPONENT / 配置面板组件
 // =============================================================================
 
 export function ConfigPanel({
@@ -202,42 +334,13 @@ export function ConfigPanel({
 
       <div className="p-4 space-y-4">
         {/* Strategy Selection / 策略选择 */}
-        <div>
-          <label className="block text-xs font-medium text-white/60 mb-2">
-            📊 选择策略 / Select Strategy
-          </label>
-          <select
-            value={config.strategy}
-            onChange={(e) =>
-              setConfig((prev) => ({ ...prev, strategy: e.target.value }))
-            }
-            className="w-full px-3 py-2.5 bg-gradient-to-br from-white/10 to-white/5 border-2 border-white/20 hover:border-accent/50 rounded-lg text-white text-sm font-medium focus:outline-none focus:ring-2 focus:ring-accent/50 focus:border-accent shadow-lg transition-all cursor-pointer appearance-none"
-            style={{
-              backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%23ffffff' d='M6 9L1 4h10z'/%3E%3C/svg%3E")`,
-              backgroundRepeat: "no-repeat",
-              backgroundPosition: "right 12px center",
-              backgroundSize: "12px",
-              paddingRight: "36px",
-            }}
-            data-testid="strategy-select"
-            title={selectedStrategy?.description || "选择一个策略"}
-          >
-            {strategies.map((strategy) => (
-              <option
-                key={strategy.id}
-                value={strategy.id}
-                className="bg-surface text-white py-2 hover:bg-accent/20"
-              >
-                📈 {strategy.name} / {strategy.nameEn}
-              </option>
-            ))}
-          </select>
-          {selectedStrategy && (
-            <p className="mt-2 text-xs text-white/50 bg-white/5 p-2 rounded border border-white/10">
-              💡 {selectedStrategy.description}
-            </p>
-          )}
-        </div>
+        <StrategySelector
+          strategies={strategies}
+          selectedStrategy={config.strategy}
+          onStrategyChange={(strategyId) =>
+            setConfig((prev) => ({ ...prev, strategy: strategyId }))
+          }
+        />
 
         {/* Target Selection (Sector or Stocks) */}
         <div>
