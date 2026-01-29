@@ -11,7 +11,8 @@
  */
 
 import type { KLineData, KLineTimeFrame, ApiResponse } from "./types";
-import { getKLineData } from "./sources/eastmoney";
+import { getKLineData as getKLineDataEastmoney } from "./sources/eastmoney";
+import { getKLineData as getKLineDataSina } from "./sources/sina";
 import { logger } from "./logger";
 
 // =============================================================================
@@ -343,39 +344,63 @@ function withTimeout<T>(
  */
 const DEFAULT_TIMEOUT = 30000;
 
+// =============================================================================
+// DATA SOURCE CHAIN / 数据源链
+// =============================================================================
+
 /**
- * Fetch K-line data for a single symbol with retry and timeout
- * 带重试和超时的单只股票K线获取
+ * Data source definition for chain-of-responsibility failover
+ * 数据源定义，用于责任链式故障转移
  */
-async function fetchWithRetry(
+interface DataSourceProvider {
+  name: string;
+  fetch: (symbol: string, timeframe: KLineTimeFrame, limit: number) => Promise<ApiResponse<KLineData[]>>;
+}
+
+/**
+ * Ordered data source chain: EastMoney (primary) → Sina (fallback)
+ * 有序数据源链：东方财富（主）→ 新浪（备）
+ *
+ * Each source is tried in order. If the primary fails, the next source is attempted.
+ * This ensures robust data fetching without degradation to mock/fake data.
+ */
+const DATA_SOURCES: DataSourceProvider[] = [
+  { name: "eastmoney", fetch: getKLineDataEastmoney },
+  { name: "sina", fetch: getKLineDataSina },
+];
+
+/**
+ * Try fetching K-line data from a single source with retry and timeout
+ * 从单个数据源获取K线数据，带重试和超时
+ */
+async function fetchFromSourceWithRetry(
+  source: DataSourceProvider,
   symbol: string,
   timeframe: KLineTimeFrame,
   limit: number,
   retryConfig: RetryConfig,
-  timeout: number = DEFAULT_TIMEOUT,
+  timeout: number,
   onError?: ErrorCallback,
-): Promise<ApiResponse<KLineData[]>> {
+): Promise<ApiResponse<KLineData[]> | null> {
   let lastError: Error | null = null;
 
   for (let retry = 0; retry <= retryConfig.maxRetries; retry++) {
     try {
-      // Wrap the request with timeout
       const response = await withTimeout(
-        getKLineData(symbol, timeframe, limit),
+        source.fetch(symbol, timeframe, limit),
         timeout,
-        `Request timeout for ${symbol} after ${timeout}ms`,
+        `Request timeout for ${symbol} from ${source.name} after ${timeout}ms`,
       );
 
       if (response.success && response.data) {
         return response;
       }
 
-      // If API returned success:false, treat as error
       lastError = new Error(response.error ?? "Unknown error");
 
       if (retry < retryConfig.maxRetries) {
         const delay = calculateBackoffDelay(retry, retryConfig);
-        logger.debug(SOURCE_NAME, `Retrying ${symbol} after ${delay}ms`, {
+        logger.debug(SOURCE_NAME, `Retrying ${symbol} from ${source.name} after ${delay}ms`, {
           retry: retry + 1,
           maxRetries: retryConfig.maxRetries,
           reason: lastError.message,
@@ -384,8 +409,6 @@ async function fetchWithRetry(
       }
     } catch (err) {
       lastError = err instanceof Error ? err : new Error(String(err));
-
-      // Check if it's a timeout error
       const isTimeout = lastError.message.includes("timeout");
 
       if (onError) {
@@ -393,11 +416,10 @@ async function fetchWithRetry(
       }
 
       if (retry < retryConfig.maxRetries) {
-        // Use longer delay for timeout errors
         const delay = isTimeout
           ? calculateBackoffDelay(retry + 1, retryConfig)
           : calculateBackoffDelay(retry, retryConfig);
-        logger.debug(SOURCE_NAME, `Retrying ${symbol} after ${delay}ms`, {
+        logger.debug(SOURCE_NAME, `Retrying ${symbol} from ${source.name} after ${delay}ms`, {
           retry: retry + 1,
           maxRetries: retryConfig.maxRetries,
           reason: lastError.message,
@@ -408,11 +430,58 @@ async function fetchWithRetry(
     }
   }
 
-  // All retries failed
+  logger.warn(SOURCE_NAME, `All retries exhausted for ${symbol} from ${source.name}`, {
+    error: lastError?.message,
+  });
+  return null;
+}
+
+/**
+ * Fetch K-line data with multi-source failover
+ * 多数据源故障转移获取K线数据
+ *
+ * Tries each data source in order (EastMoney → Sina).
+ * Only returns failure if ALL sources fail for the symbol.
+ */
+async function fetchWithRetry(
+  symbol: string,
+  timeframe: KLineTimeFrame,
+  limit: number,
+  retryConfig: RetryConfig,
+  timeout: number = DEFAULT_TIMEOUT,
+  onError?: ErrorCallback,
+): Promise<ApiResponse<KLineData[]>> {
+  const sourceErrors: string[] = [];
+
+  for (const source of DATA_SOURCES) {
+    const result = await fetchFromSourceWithRetry(
+      source,
+      symbol,
+      timeframe,
+      limit,
+      retryConfig,
+      timeout,
+      onError,
+    );
+
+    if (result) {
+      if (source !== DATA_SOURCES[0]) {
+        logger.info(SOURCE_NAME, `Fetched ${symbol} from fallback source: ${source.name}`);
+      }
+      return result;
+    }
+
+    sourceErrors.push(source.name);
+  }
+
+  // All sources failed - return explicit failure (no mock degradation)
+  const errorMsg = `All data sources failed for ${symbol} (tried: ${sourceErrors.join(" → ")})`;
+  logger.error(SOURCE_NAME, errorMsg);
+
   return {
     success: false,
     data: null,
-    error: lastError?.message ?? "Max retries exceeded",
+    error: errorMsg,
     source: SOURCE_NAME,
     cached: false,
     timestamp: Date.now(),
